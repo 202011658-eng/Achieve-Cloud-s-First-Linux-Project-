@@ -4,6 +4,7 @@
 #include <unistd.h>
 #include <arpa/inet.h>
 #include <sys/socket.h>
+#include <termios.h>
 
 #define PORT 9000
 #define MAX_BUFFER 4096
@@ -13,8 +14,48 @@ void handleError(const char* message) {
     exit(1);
 }
 
-// 메뉴 출력
-void printMenu() {
+// 비밀번호 입력 (화면에 표시 안 함)
+void getPassword(char* password, int max_len) {
+    struct termios oldt, newt;
+    int i = 0;
+    char ch;
+
+    // 터미널 설정 백업
+    tcgetattr(STDIN_FILENO, &oldt);
+    newt = oldt;
+    newt.c_lflag &= ~(ECHO); // ECHO 끄기
+    tcsetattr(STDIN_FILENO, TCSANOW, &newt);
+
+    // 비밀번호 입력
+    while (i < max_len - 1) {
+        ch = getchar();
+        if (ch == '\n' || ch == '\r') {
+            break;
+        }
+        password[i++] = ch;
+        printf("*"); // 별표 출력
+    }
+    password[i] = '\0';
+    printf("\n");
+
+    // 터미널 설정 복원
+    tcsetattr(STDIN_FILENO, TCSANOW, &oldt);
+}
+
+// 초기 메뉴 (로그인 전)
+void printInitialMenu() {
+    printf("\n========================================\n");
+    printf("       온라인 게시판 시스템\n");
+    printf("========================================\n");
+    printf("1. 로그인\n");
+    printf("2. 회원가입\n");
+    printf("3. 종료\n");
+    printf("========================================\n");
+    printf("선택: ");
+}
+
+// 메인 메뉴 (로그인 후)
+void printMainMenu() {
     printf("\n========================================\n");
     printf("       온라인 게시판 시스템\n");
     printf("========================================\n");
@@ -22,43 +63,121 @@ void printMenu() {
     printf("2. 글 목록 보기\n");
     printf("3. 글 읽기\n");
     printf("4. 글 삭제\n");
-    printf("5. 종료\n");
+    printf("5. 접속자 목록\n");
+    printf("6. 로그아웃\n");
     printf("========================================\n");
     printf("선택: ");
 }
 
-// 게시글 작성
-void writePost(int sock) {
+// 회원가입
+void registerUser(int sock) {
     char buffer[MAX_BUFFER];
 
-    // 서버에 작성 요청
-    write(sock, "WRITE", 5);
+    write(sock, "REGISTER", 8);
 
-    // 제목 입력
-    read(sock, buffer, MAX_BUFFER); // "TITLE" 수신
-    printf("\n제목을 입력하세요: ");
-    fgets(buffer, 100, stdin);
-    buffer[strcspn(buffer, "\n")] = '\0'; // 개행 제거
-    write(sock, buffer, strlen(buffer));
-
-    // 작성자 입력
-    read(sock, buffer, MAX_BUFFER); // "AUTHOR" 수신
-    printf("작성자를 입력하세요: ");
+    // 아이디 입력
+    read(sock, buffer, MAX_BUFFER); // "USERNAME" 수신
+    printf("\n=== 회원가입 ===\n");
+    printf("아이디를 입력하세요 (영문, 숫자): ");
     fgets(buffer, 50, stdin);
     buffer[strcspn(buffer, "\n")] = '\0';
     write(sock, buffer, strlen(buffer));
 
-    // 내용 입력
-    read(sock, buffer, MAX_BUFFER); // "CONTENT" 수신
-    printf("내용을 입력하세요 (최대 500자):\n");
-    fgets(buffer, 500, stdin);
+    // 비밀번호 입력
+    read(sock, buffer, MAX_BUFFER); // "PASSWORD" 수신
+    printf("비밀번호를 입력하세요: ");
+    getPassword(buffer, 50);
+    write(sock, buffer, strlen(buffer));
+
+    // 닉네임 입력
+    read(sock, buffer, MAX_BUFFER); // "NICKNAME" 수신
+    printf("닉네임을 입력하세요: ");
+    fgets(buffer, 50, stdin);
     buffer[strcspn(buffer, "\n")] = '\0';
     write(sock, buffer, strlen(buffer));
 
     // 결과 수신
     int len = read(sock, buffer, MAX_BUFFER);
     buffer[len] = '\0';
-    printf("\n%s\n", buffer);
+    
+    if (strncmp(buffer, "SUCCESS", 7) == 0) {
+        printf("\n✓ %s", buffer + 8);
+    } else {
+        printf("\n✗ %s", buffer + 6);
+    }
+}
+
+// 로그인
+int loginUser(int sock) {
+    char buffer[MAX_BUFFER];
+
+    write(sock, "LOGIN", 5);
+
+    // 아이디 입력
+    read(sock, buffer, MAX_BUFFER); // "USERNAME" 수신
+    printf("\n=== 로그인 ===\n");
+    printf("아이디: ");
+    fgets(buffer, 50, stdin);
+    buffer[strcspn(buffer, "\n")] = '\0';
+    write(sock, buffer, strlen(buffer));
+
+    // 비밀번호 입력
+    read(sock, buffer, MAX_BUFFER); // "PASSWORD" 수신
+    printf("비밀번호: ");
+    getPassword(buffer, 50);
+    write(sock, buffer, strlen(buffer));
+
+    // 결과 수신
+    int len = read(sock, buffer, MAX_BUFFER);
+    buffer[len] = '\0';
+
+    if (strncmp(buffer, "SUCCESS", 7) == 0) {
+        printf("\n✓ %s", buffer + 8);
+        return 1; // 로그인 성공
+    } else {
+        printf("\n✗ %s", buffer + 6);
+        return 0; // 로그인 실패
+    }
+}
+
+// 게시글 작성
+void writePost(int sock) {
+    char buffer[MAX_BUFFER];
+
+    write(sock, "WRITE", 5);
+
+    // 제목 입력
+    read(sock, buffer, MAX_BUFFER); // "TITLE" 수신
+    printf("\n=== 글 작성 ===\n");
+    printf("제목을 입력하세요: ");
+    fgets(buffer, 100, stdin);
+    buffer[strcspn(buffer, "\n")] = '\0';
+    write(sock, buffer, strlen(buffer));
+
+    // 서버 응답 체크 (제목 욕설 필터링)
+    int len = read(sock, buffer, MAX_BUFFER);
+    buffer[len] = '\0';
+    
+    if (strncmp(buffer, "ERROR", 5) == 0) {
+        printf("\n✗ %s", buffer + 6);
+        return;
+    }
+
+    // 내용 입력
+    printf("내용을 입력하세요 (최대 500자):\n");
+    fgets(buffer, 500, stdin);
+    buffer[strcspn(buffer, "\n")] = '\0';
+    write(sock, buffer, strlen(buffer));
+
+    // 결과 수신
+    len = read(sock, buffer, MAX_BUFFER);
+    buffer[len] = '\0';
+    
+    if (strncmp(buffer, "SUCCESS", 7) == 0) {
+        printf("\n✓ %s", buffer + 8);
+    } else {
+        printf("\n✗ %s", buffer + 6);
+    }
 }
 
 // 게시글 목록 보기
@@ -80,7 +199,7 @@ void readPost(int sock) {
 
     printf("\n읽을 게시글 번호를 입력하세요: ");
     scanf("%d", &post_id);
-    getchar(); // 버퍼 비우기
+    getchar();
 
     snprintf(buffer, MAX_BUFFER, "READ:%d", post_id);
     write(sock, buffer, strlen(buffer));
@@ -98,7 +217,7 @@ void deletePost(int sock) {
 
     printf("\n삭제할 게시글 번호를 입력하세요: ");
     scanf("%d", &post_id);
-    getchar(); // 버퍼 비우기
+    getchar();
 
     printf("정말 삭제하시겠습니까? (y/n): ");
     char confirm;
@@ -112,6 +231,22 @@ void deletePost(int sock) {
 
     snprintf(buffer, MAX_BUFFER, "DELETE:%d", post_id);
     write(sock, buffer, strlen(buffer));
+
+    int len = read(sock, buffer, MAX_BUFFER);
+    buffer[len] = '\0';
+
+    if (strncmp(buffer, "SUCCESS", 7) == 0) {
+        printf("\n✓ %s", buffer + 8);
+    } else {
+        printf("\n✗ %s", buffer + 6);
+    }
+}
+
+// 접속자 목록
+void listOnlineUsers(int sock) {
+    char buffer[MAX_BUFFER];
+
+    write(sock, "ONLINE", 6);
 
     int len = read(sock, buffer, MAX_BUFFER);
     buffer[len] = '\0';
@@ -157,12 +292,40 @@ int main(int argc, char* argv[]) {
     buffer[len] = '\0';
     printf("%s\n", buffer);
 
-    // 메인 루프
+    // 로그인 전 루프
+    int logged_in = 0;
     int choice;
-    while (1) {
-        printMenu();
+    
+    while (!logged_in) {
+        printInitialMenu();
         scanf("%d", &choice);
-        getchar(); // 버퍼 비우기
+        getchar();
+
+        switch (choice) {
+        case 1:
+            if (loginUser(client_sock)) {
+                logged_in = 1;
+            }
+            break;
+        case 2:
+            registerUser(client_sock);
+            break;
+        case 3:
+            write(client_sock, "QUIT", 4);
+            read(client_sock, buffer, MAX_BUFFER);
+            printf("\n게시판을 종료합니다. 안녕히 가세요!\n");
+            close(client_sock);
+            return 0;
+        default:
+            printf("\n잘못된 선택입니다. 다시 선택해주세요.\n");
+        }
+    }
+
+    // 로그인 후 메인 루프
+    while (1) {
+        printMainMenu();
+        scanf("%d", &choice);
+        getchar();
 
         switch (choice) {
         case 1:
@@ -178,9 +341,12 @@ int main(int argc, char* argv[]) {
             deletePost(client_sock);
             break;
         case 5:
+            listOnlineUsers(client_sock);
+            break;
+        case 6:
             write(client_sock, "QUIT", 4);
             read(client_sock, buffer, MAX_BUFFER);
-            printf("\n게시판을 종료합니다. 안녕히 가세요!\n");
+            printf("\n로그아웃되었습니다. 안녕히 가세요!\n");
             close(client_sock);
             return 0;
         default:
