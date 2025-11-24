@@ -14,7 +14,7 @@
 #define PORT 9000
 #define MAX_BUFFER 4096
 #define DATA_FILE "board_data.txt"
-#define USER_FILE "users.txt"
+#define USER_FILE "user_data.txt"
 #define MAX_POSTS 100
 #define MAX_USERS 1000
 #define MAX_ONLINE 50
@@ -53,6 +53,10 @@ const char* bad_words[] = {
     NULL
 };
 
+/* ============================================================
+ * 1. 유틸리티 및 에러 처리
+ * ============================================================ */
+
 void handleError(const char *message) {
     perror(message);
     exit(1);
@@ -69,6 +73,10 @@ void getCurrentTime(char *buffer) {
     struct tm *t = localtime(&now);
     strftime(buffer, 30, "%Y-%m-%d %H:%M:%S", t);
 }
+
+/* ============================================================
+ * 2. 욕설 필터링
+ * ============================================================ */
 
 // 욕설 필터링 함수
 int containsBadWord(const char* text) {
@@ -103,6 +111,10 @@ void maskBadWords(char* text) {
         }
     }
 }
+
+/* ============================================================
+ * 3. 사용자 관리 및 파일 I/O (Locking 포함)
+ * ============================================================ */
 
 // 사용자 읽기
 int readUsers(User users[]) {
@@ -184,6 +196,10 @@ int nicknameExists(const char* nickname) {
     return 0;
 }
 
+/* ============================================================
+ * 4. 접속자 관리
+ * ============================================================ */
+
 // 접속자 추가
 void addOnlineUser(const char* username, const char* nickname, const char* ip) {
     if (online_count >= MAX_ONLINE) return;
@@ -213,6 +229,10 @@ void removeOnlineUser(const char* username) {
         }
     }
 }
+
+/* ============================================================
+ * 5. 주요 기능: 회원가입, 로그인, 접속자 목록
+ * ============================================================ */
 
 // 회원가입
 void registerUser(int client_sock) {
@@ -340,6 +360,10 @@ void listOnlineUsers(int client_sock) {
     
     write(client_sock, buffer, offset);
 }
+
+/* ============================================================
+ * 6. 게시글 관리 및 파일 I/O
+ * ============================================================ */
 
 // 게시글 목록 읽기
 int readPosts(Post posts[]) {
@@ -556,6 +580,80 @@ void deletePost(int client_sock, int post_id, const char* nickname) {
           strlen("SUCCESS|게시글이 삭제되었습니다.\n"));
 }
 
+// 게시글 수정 (본인 글만)
+void updatePost(int client_sock, int post_id, const char* nickname) {
+    Post posts[MAX_POSTS];
+    int count = readPosts(posts);
+    
+    int found = -1;
+    for (int i = 0; i < count; i++) {
+        if (posts[i].id == post_id) {
+            found = i;
+            break;
+        }
+    }
+    
+    // 게시글 존재 여부 확인
+    if (found == -1) {
+        write(client_sock, "ERROR|해당 게시글을 찾을 수 없습니다.\n",
+              strlen("ERROR|해당 게시글을 찾을 수 없습니다.\n"));
+        return;
+    }
+    
+    // 작성자 확인 (본인만 수정 가능)
+    if (strcmp(posts[found].author, nickname) != 0) {
+        write(client_sock, "ERROR|본인이 작성한 글만 수정할 수 있습니다.\n",
+              strlen("ERROR|본인이 작성한 글만 수정할 수 있습니다.\n"));
+        return;
+    }
+
+    // 수정 가능함을 알림
+    write(client_sock, "OK", 2);
+
+    char buffer[MAX_BUFFER];
+
+    // 새 제목 수신
+    write(client_sock, "TITLE", 5);
+    int len = read(client_sock, buffer, MAX_BUFFER);
+    if (len <= 0) return;
+    buffer[len] = '\0';
+
+    // 제목 욕설 체크
+    if (containsBadWord(buffer)) {
+        write(client_sock, "ERROR|제목에 부적절한 단어가 포함되어 있습니다.\n",
+              strlen("ERROR|제목에 부적절한 단어가 포함되어 있습니다.\n"));
+        return;
+    }
+    strncpy(posts[found].title, buffer, 99);
+    posts[found].title[99] = '\0';
+
+    // 새 내용 수신
+    write(client_sock, "CONTENT", 7);
+    len = read(client_sock, buffer, MAX_BUFFER);
+    if (len <= 0) return;
+    buffer[len] = '\0';
+
+    // 내용 욕설 체크 및 마스킹
+    if (containsBadWord(buffer)) {
+        maskBadWords(buffer);
+    }
+    strncpy(posts[found].content, buffer, 499);
+    posts[found].content[499] = '\0';
+
+    // 수정 시간 갱신 (선택 사항, 여기서는 갱신함)
+    getCurrentTime(posts[found].timestamp);
+
+    // 파일 저장
+    savePosts(posts, count);
+    
+    write(client_sock, "SUCCESS|게시글이 수정되었습니다.\n",
+          strlen("SUCCESS|게시글이 수정되었습니다.\n"));
+}
+
+/* ============================================================
+ * 7. 클라이언트 요청 처리 및 메인
+ * ============================================================ */
+
 // 클라이언트 요청 처리
 void handleClient(int client_sock, char *client_ip) {
     char buffer[MAX_BUFFER];
@@ -621,6 +719,9 @@ void handleClient(int client_sock, char *client_ip) {
             deletePost(client_sock, post_id, nickname);
         }
         else if (strncmp(buffer, "ONLINE", 6) == 0) {
+            listOnlineUsers(client_sock);
+        }
+        else if (strncmp(buffer, "UPDATE", 6) == 0) {
             listOnlineUsers(client_sock);
         }
         else {

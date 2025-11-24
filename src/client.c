@@ -9,6 +9,10 @@
 #define PORT 9000
 #define MAX_BUFFER 4096
 
+/* ============================================================
+ * 1. 유틸리티 함수
+ * ============================================================ */
+
 void handleError(const char* message) {
     perror(message);
     exit(1);
@@ -42,6 +46,10 @@ void getPassword(char* password, int max_len) {
     tcsetattr(STDIN_FILENO, TCSANOW, &oldt);
 }
 
+/* ============================================================
+ * 2. 메뉴 출력 함수
+ * ============================================================ */
+
 // 초기 메뉴 (로그인 전)
 void printInitialMenu() {
     printf("\n========================================\n");
@@ -62,12 +70,17 @@ void printMainMenu() {
     printf("1. 글 작성\n");
     printf("2. 글 목록 보기\n");
     printf("3. 글 읽기\n");
-    printf("4. 글 삭제\n");
-    printf("5. 접속자 목록\n");
-    printf("6. 로그아웃\n");
+    printf("4. 글 수정\n");  // [추가]
+    printf("5. 글 삭제\n");  // [번호 밀림]
+    printf("6. 접속자 목록\n");
+    printf("7. 로그아웃\n");
     printf("========================================\n");
     printf("선택: ");
 }
+
+/* ============================================================
+ * 3. 서버 통신 함수
+ * ============================================================ */
 
 // 회원가입
 void registerUser(int sock) {
@@ -242,6 +255,61 @@ void deletePost(int sock) {
     }
 }
 
+void updatePost(int sock) {
+    char buffer[MAX_BUFFER];
+    int post_id;
+
+    printf("\n수정할 게시글 번호를 입력하세요: ");
+    scanf("%d", &post_id);
+    getchar(); // 버퍼 비우기
+
+    // UPDATE 명령 전송
+    snprintf(buffer, MAX_BUFFER, "UPDATE:%d", post_id);
+    write(sock, buffer, strlen(buffer));
+
+    // 수정 가능 여부 확인 (작성자 확인 등)
+    int len = read(sock, buffer, MAX_BUFFER);
+    buffer[len] = '\0';
+
+    if (strncmp(buffer, "ERROR", 5) == 0) {
+        printf("\n✗ %s", buffer + 6);
+        return;
+    }
+
+    // 여기서부터는 writePost와 유사한 로직
+    // 제목 입력 요청 수신 ("TITLE")
+    read(sock, buffer, MAX_BUFFER); 
+    printf("\n=== 글 수정 ===\n");
+    printf("새로운 제목을 입력하세요: ");
+    fgets(buffer, 100, stdin);
+    buffer[strcspn(buffer, "\n")] = '\0';
+    write(sock, buffer, strlen(buffer));
+
+    // 제목 에러 체크
+    len = read(sock, buffer, MAX_BUFFER);
+    buffer[len] = '\0';
+    if (strncmp(buffer, "ERROR", 5) == 0) {
+        printf("\n✗ %s", buffer + 6);
+        return;
+    }
+
+    // 내용 입력 ("CONTENT" 수신 후)
+    printf("새로운 내용을 입력하세요 (최대 500자):\n");
+    fgets(buffer, 500, stdin);
+    buffer[strcspn(buffer, "\n")] = '\0';
+    write(sock, buffer, strlen(buffer));
+
+    // 최종 결과 수신
+    len = read(sock, buffer, MAX_BUFFER);
+    buffer[len] = '\0';
+    
+    if (strncmp(buffer, "SUCCESS", 7) == 0) {
+        printf("\n✓ %s", buffer + 8);
+    } else {
+        printf("\n✗ %s", buffer + 6);
+    }
+}
+
 // 접속자 목록
 void listOnlineUsers(int sock) {
     char buffer[MAX_BUFFER];
@@ -253,6 +321,12 @@ void listOnlineUsers(int sock) {
 
     printf("\n%s\n", buffer);
 }
+
+
+
+/* ============================================================
+ * 4. 메인 함수
+ * ============================================================ */
 
 int main(int argc, char* argv[]) {
     int client_sock;
@@ -323,11 +397,7 @@ int main(int argc, char* argv[]) {
 
     // 로그인 후 메인 루프
     while (1) {
-        printMainMenu();
-        scanf("%d", &choice);
-        getchar();
-
-        switch (choice) {
+       switch (choice) {
         case 1:
             writePost(client_sock);
             break;
@@ -337,13 +407,16 @@ int main(int argc, char* argv[]) {
         case 3:
             readPost(client_sock);
             break;
-        case 4:
+        case 4: // [추가]
+            updatePost(client_sock);
+            break;
+        case 5: // [번호 밀림]
             deletePost(client_sock);
             break;
-        case 5:
+        case 6: // [번호 밀림]
             listOnlineUsers(client_sock);
             break;
-        case 6:
+        case 7: // [번호 밀림]
             write(client_sock, "QUIT", 4);
             read(client_sock, buffer, MAX_BUFFER);
             printf("\n로그아웃되었습니다. 안녕히 가세요!\n");
@@ -351,7 +424,6 @@ int main(int argc, char* argv[]) {
             return 0;
         default:
             printf("\n잘못된 선택입니다. 다시 선택해주세요.\n");
-        }
     }
 
     close(client_sock);
