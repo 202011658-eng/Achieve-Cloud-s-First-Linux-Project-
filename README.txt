@@ -28,7 +28,15 @@ handleError(const Char *message) : 서버 통신 과정 중 에러 처리 함수
 sigchld_handler(int sig) : 좀비 프로세스 방지
 getCurrentTime(char *buffer) : 현재 시간 가져옴 (time_t 구조체, strftime() 함수 이용)
 containsBadWord(const char* text) : 욕설 필터링 함수 // 전역변수 bad_words[] 에서 해당 원소 포함하는지 strstr() 함수로 비교
-maskBadWords(char* text) : 게시글이나 댓글에 포함된 욕설을 필터링하는 함수추가 기능 넣은것들----
+maskBadWords(char* text) : 게시글이나 댓글에 포함된 욕설을 필터링하는 함수
+readUsers(User users[]) : 유저 파일(USER_FILE - > 텍스트?)을 읽어 type_User 배열에 username/password/nickname 형태로 저장 (읽기 잠금 사용)
+-> 잠금 형태 교재에 나온 형태로 바꾸는게 나을듯?
+saveUser(User* user) : 유저 파일(USER_FILE) 을 연 뒤 해당 파일에 인자로 받은 USER의 정보를 씀. (쓰기 잠금 사용)
+
+
+
+
+추가 기능 넣은것들----
 
 파일 기반 데이터 저장
 
