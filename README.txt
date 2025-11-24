@@ -1,81 +1,82 @@
-----추가 기능 넣은것들----
-
-파일 기반 데이터 저장
-
-board_data.txt 파일에 게시글 영구 저장
-구조화된 형식으로 저장 (ID|제목|작성자|내용|시간)
 
 
-파일 잠금 (flock)
-
-동시 접근 시 충돌 방지
-읽기 잠금(LOCK_SH), 쓰기 잠금(LOCK_EX) 사용
-
-
-타임스탬프
-
-게시글 작성 시 자동으로 현재 시간 기록
+---------------------------------server.c DB---------------------------------
+서버 DB : users.txt (유저 관리 텍스트 파일) -> 이진 파일로 바꿀까?
+board_data.txt (게시판 내 글 저장)
+log_txt (게시판 로그 저장 -> 추가 예정)
 
 
-게시글 최대 개수 제한
+---------------------------------server.c types---------------------------------
+struct Post -> 게시글 구조체 (record)
+struct User -> 사용자 구조체 (이름, 패스워드, 닉네임)
+struct OnlineUser -> 현재 접속 중인 사용자
+// 제거하려고 했는데 자식 프로세스로 다중접속 구현할때 보여주기 편할거같아서 일단 남겨둠
 
-최대 100개의 게시글 제한
+
+---------------------------------server.c const---------------------------------
+PORT 9000 -> 서버를 열 포트 번호 (9000번 고정)
+MAX_BUFFER 4096 -> 버퍼 최대 크기
+DATA_FILE "board_data.txt" -> 게시판 글 DB
+USER_FILE "users.txt" -> 유저 DB
+MAX_POSTS 100 -> 최대 글 수 (100개)
+MAX_USERS 1000 -> 최대 생성 가능한 유저 수 (1000명)
+MAX_ONLINE 50 -> 최대 다중 접속자 수 (50명)
 
 
-server.c의 주요 함수:
+---------------------------------server.c 주요 함수---------------------------------
 
+1. 유틸리티 및 에러 처리
 handleError(const Char *message) : 서버 통신 과정 중 에러 처리 함수
+
 sigchld_handler(int sig) : 좀비 프로세스 방지
+
 getCurrentTime(char *buffer) : 현재 시간 가져옴 (time_t 구조체, strftime() 함수 이용)
+
+
+2.욕설 필터링
 containsBadWord(const char* text) : 욕설 필터링 함수 // 전역변수 bad_words[] 에서 해당 원소 포함하는지 strstr() 함수로 비교
+
 maskBadWords(char* text) : 게시글이나 댓글에 포함된 욕설을 필터링하는 함수
+
+3.사용자 관리 및 파일 I/O
 readUsers(User users[]) : 유저 파일(USER_FILE - > 텍스트?)을 읽어 type_User 배열에 username/password/nickname 형태로 저장 (읽기 잠금 사용)
 -> 잠금 형태 교재에 나온 형태로 바꾸는게 나을듯?
-saveUser(User* user) : 유저 파일(USER_FILE) 을 연 뒤 해당 파일에 인자로 받은 USER의 정보를 씀. (쓰기 잠금 사용)
+현재는 flock의 LOCK_SH -> 읽기 잠금 사용
+
+saveUser(User* user) : 유저 파일(USER_FILE) 을 연 뒤 해당 파일에 인자로 받은 USER의 정보를 씀. (쓰기 잠금 사용) -> 잠금 형태 바꾸기
+현재 flock의 LOCK_EX -> 배타적 잠금 (쓰기 잠금) 사용
+
+
+... 이후 작성 예정
 
 
 
+---------------------------------11/24 1840 수정사항---------------------------------
 
-추가 기능 넣은것들----
+1. 분류에 맞게 함수 순서 수정
+server.c
+1.유틸리티 및 에러 처리
+2.욕설 필터링
+3.사용자 관리 및 파일 I/O
+4.접속자 관리
+5.주요 기능 : 회원가입, 로그인 등
+6.게시글 관리 및 파일 I/O
+7.클라이언트 요청 처리 및 메인함수
 
-파일 기반 데이터 저장
+client.c
+1.유틸리티 
+2.메뉴 출력
+3.서버 통신 함수 (registerUser 등 server와 실시간으로 write / read 로 소켓을 통해 데이터를 받아 통신)
+4.메인
 
-board_data.txt 파일에 게시글 영구 저장
-구조화된 형식으로 저장 (ID|제목|작성자|내용|시간)
+2. 게시글 수정 함수
 
+void updatePost(int client_sock, int post_id, const char* nickname) -> 서버 측
 
-파일 잠금 (flock)
+void updatePost(int sock) -> 클라이언트 측
 
-동시 접근 시 충돌 방지
-읽기 잠금(LOCK_SH), 쓰기 잠금(LOCK_EX) 사용
+메뉴가 추가됨에 따라 서버 및 클라이언트 인터페이스 추가
+클라이언트 -> 서버 측으로 송신하는 명령 인터페이스 추가
+서버 -> 클라이언트 측에서 수신받는 명령 인터페이스 추가
 
-
-타임스탬프
-
-게시글 작성 시 자동으로 현재 시간 기록
-
-
-게시글 최대 개수 제한
-
-최대 100개의 게시글 제한
-
-
-server.c의 주요 함수:
-
-handleError(const Char *message) : 서버 통신 과정 중 에러 처리 함수
-sigchld_handler(int sig) : 좀비 프로세스 방지
-getCurrentTime(char *buffer) : 현재 시간 가져옴 (time_t 구조체, strftime() 함수 이용)
-containsBadWord(const char* text) : 욕설 필터링 함수 // 전역변수 bad_words[] 에서 해당 원소 포함하는지 strstr() 함수로 비교
-maskBadWords(char* text) : 게시글이나 댓글에 포함된 욕설을 필터링하는 함수
-
-
-
-
-client.c의 주요 함수:
-
-printMenu(): 메뉴 출력
-writePost(): 게시글 작성 인터페이스
-listPosts(): 목록 보기
-readPost(): 게시글 읽기
-deletePost(): 게시글 삭제
 
