@@ -721,8 +721,9 @@ void handleClient(int client_sock, char *client_ip) {
         else if (strncmp(buffer, "ONLINE", 6) == 0) {
             listOnlineUsers(client_sock);
         }
-        else if (strncmp(buffer, "UPDATE", 6) == 0) {
-            listOnlineUsers(client_sock);
+        else if (strncmp(buffer, "UPDATE:", 6) == 0) {
+            int post_id = atoi(buffer + 7);
+            updatePost(client_sock, post_id, nickname);
         }
         else {
             write(client_sock, "ERROR|알 수 없는 명령입니다.\n",
