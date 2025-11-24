@@ -397,7 +397,11 @@ int main(int argc, char* argv[]) {
 
     // 로그인 후 메인 루프
     while (1) {
-       switch (choice) {
+        printMainMenu();
+        scanf("%d", &choice);
+        getchar();
+
+        switch (choice) {
         case 1:
             writePost(client_sock);
             break;
@@ -424,6 +428,7 @@ int main(int argc, char* argv[]) {
             return 0;
         default:
             printf("\n잘못된 선택입니다. 다시 선택해주세요.\n");
+        }
     }
 
     close(client_sock);
