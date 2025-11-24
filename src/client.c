@@ -429,7 +429,6 @@ int main(int argc, char* argv[]) {
         default:
             printf("\n잘못된 선택입니다. 다시 선택해주세요.\n");
         }
-    }
 
     close(client_sock);
     return 0;
