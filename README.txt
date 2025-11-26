@@ -1,100 +1,100 @@
+🖥 server.c 함수 정리 (간단 버전)
 
 
----------------------------------server.c DB---------------------------------
-서버 DB : users.txt (유저 관리 텍스트 파일) -> 이진 파일로 바꿀까?
-board_data.txt (게시판 내 글 저장)
-log_txt (게시판 로그 저장 -> 추가 예정)
+handleError : 에러 메시지 출력하고 서버 바로 종료.
+
+sigchld_handler : 자식 프로세스 좀비 안 남게 회수.
+
+getCurrentTime : 현재 시간을 "YYYY-MM-DD HH:MM:SS" 문자열로 만들어줌.
+
+containsBadWord : 문자열에 욕설(금지어) 있는지 검사.
+
+maskBadWords : 문자열 안 욕설 부분을 *로 가려줌.
+
+readUsers : user_data.txt에서 회원 목록 읽어오기.
+
+saveUser : 새 회원 한 명을 user_data.txt에 추가해서 저장.
+
+userExists : 아이디가 이미 존재하는지 확인.
+
+authenticateUser : 아이디+비번이 맞는 계정인지 확인하고 닉네임 돌려줌.
+
+nicknameExists : 닉네임이 이미 존재하는지 확인.
+
+addOnlineUser : 로그인한 유저를 온라인 사용자 목록에 추가.
+
+removeOnlineUser : 로그아웃/끊긴 유저를 온라인 목록에서 제거.
+
+listOnlineUsers : 현재 접속 중인 유저 목록을 문자열로 만들어 클라이언트에 전송.
+
+readPosts : board_data.txt에서 게시글들을 읽어 배열에 채움.
+
+savePosts : 게시글 배열 전체를 board_data.txt에 저장(덮어쓰기).
+
+readComments (댓글 기능 버전) : comment_data.txt에서 댓글 목록 읽기.
+
+saveComments (댓글 기능 버전) : 댓글 목록 전체를 comment_data.txt에 저장.
+
+writePost : 클라이언트와 주고받으면서 새 글 작성해서 파일에 저장.
+
+listPosts : 게시글 목록(번호/제목/작성자/조회수 등) 만들어서 보내줌.
+
+appendCommentsForPost (댓글 기능) : 특정 게시글의 댓글들을 출력 문자열 뒤에 붙임.
+
+readPost : 게시글 하나 찾아서 조회수 1 올리고, 본문 + 댓글까지 묶어서 보내줌.
+
+deletePost : 본인이 쓴 글인지 확인 후, 해당 게시글 삭제.
+
+updatePost : 본인이 쓴 글인지 확인 후, 제목/내용 새로 받아서 수정.
+
+addComment (댓글 기능) : 댓글 내용 받아서 해당 게시글에 댓글 하나 추가.
+
+likePost : 게시글 추천수 +1 하고 저장.
+
+cmpLikes : 추천순(추천 많고, 조회수 많은 순) 정렬에 쓰이는 비교 함수(qsort용).
+
+rankPosts : 게시글들을 추천수 기준으로 정렬해서 인기글 TOP10 보내줌.
+
+searchPosts : 제목/내용/작성자에 키워드가 들어간 글만 찾아서 목록으로 보내줌.
+
+handleClient : 한 클라이언트랑 전체 통신 처리(로그인/글쓰기/삭제/댓글 등 명령 분기).
+
+main : 서버 소켓 만들고 accept+fork로 클라이언트 받는 메인 루프.
 
 
----------------------------------server.c types---------------------------------
-struct Post -> 게시글 구조체 (record)
-struct User -> 사용자 구조체 (이름, 패스워드, 닉네임)
-struct OnlineUser -> 현재 접속 중인 사용자
-// 제거하려고 했는데 자식 프로세스로 다중접속 구현할때 보여주기 편할거같아서 일단 남겨둠
+💻 client.c 함수 정리 (간단 버전)
 
 
----------------------------------server.c const---------------------------------
-PORT 9000 -> 서버를 열 포트 번호 (9000번 고정)
-MAX_BUFFER 4096 -> 버퍼 최대 크기
-DATA_FILE "board_data.txt" -> 게시판 글 DB
-USER_FILE "users.txt" -> 유저 DB
-MAX_POSTS 100 -> 최대 글 수 (100개)
-MAX_USERS 1000 -> 최대 생성 가능한 유저 수 (1000명)
-MAX_ONLINE 50 -> 최대 다중 접속자 수 (50명)
+handleError : 에러 메시지 출력하고 클라이언트 종료.
 
+getPassword : 비밀번호 입력받을 때 화면에 *로만 찍히게 입력 처리.
 
----------------------------------server.c 주요 함수---------------------------------
+printInitialMenu : 로그인/회원가입/종료 초기 메뉴를 출력.
 
-1. 유틸리티 및 에러 처리
-handleError(const Char *message) : 서버 통신 과정 중 에러 처리 함수
+printMainMenu : 글/댓글/추천 등 메인 메뉴를 출력.
 
-sigchld_handler(int sig) : 좀비 프로세스 방지
+registerUser : 서버와 통신하며 아이디/비번/닉네임 보내서 회원가입.
 
-getCurrentTime(char *buffer) : 현재 시간 가져옴 (time_t 구조체, strftime() 함수 이용)
+loginUser : 아이디/비번 보내서 로그인 시도, 성공 여부 리턴.
 
+writePostClient : 제목/내용 입력받아서 서버에 새 글 작성 요청.
 
-2.욕설 필터링
-containsBadWord(const char* text) : 욕설 필터링 함수 // 전역변수 bad_words[] 에서 해당 원소 포함하는지 strstr() 함수로 비교
+listPostsClient : 서버에 목록 요청해서 그대로 출력.
 
-maskBadWords(char* text) : 게시글이나 댓글에 포함된 욕설을 필터링하는 함수
+readPostClient : 글 번호 입력→ 서버에 READ 요청→ 글 내용+댓글 출력.
 
-3.사용자 관리 및 파일 I/O
-readUsers(User users[]) : 유저 파일(USER_FILE - > 텍스트?)을 읽어 type_User 배열에 username/password/nickname 형태로 저장 (읽기 잠금 사용)
--> 잠금 형태 교재에 나온 형태로 바꾸는게 나을듯?
-현재는 flock의 LOCK_SH -> 읽기 잠금 사용
+deletePostClient : 글 번호, 삭제 확인 받고 서버에 삭제 요청.
 
-saveUser(User* user) : 유저 파일(USER_FILE) 을 연 뒤 해당 파일에 인자로 받은 USER의 정보를 씀. (쓰기 잠금 사용) -> 잠금 형태 바꾸기
-현재 flock의 LOCK_EX -> 배타적 잠금 (쓰기 잠금) 사용
+updatePostClient : 글 번호, 새 제목/내용 입력해서 서버에 수정 요청.
 
+listOnlineUsersClient : 현재 접속자 목록 요청해서 출력.
 
-... 이후 작성 예정
+likePostClient : 글 번호 입력해서 추천 요청.
 
+rankPostsClient : 인기글(추천순) 목록 요청해서 출력.
 
+searchPostsClient : 키워드 입력해서 검색 결과 목록 출력.
 
----------------------------------11/24 1840 수정사항---------------------------------
+commentPostClient (댓글 기능) : 게시글 번호 + 댓글 내용 입력해서 서버에 댓글 작성 요청.
 
-1. 분류에 맞게 함수 순서 수정
-server.c
-1.유틸리티 및 에러 처리
-2.욕설 필터링
-3.사용자 관리 및 파일 I/O
-4.접속자 관리
-5.주요 기능 : 회원가입, 로그인 등
-6.게시글 관리 및 파일 I/O
-7.클라이언트 요청 처리 및 메인함수
-
-client.c
-1.유틸리티 
-2.메뉴 출력
-3.서버 통신 함수 (registerUser 등 server와 실시간으로 write / read 로 소켓을 통해 데이터를 받아 통신)
-4.메인
-
-2. 게시글 수정 함수
-
-void updatePost(int client_sock, int post_id, const char* nickname) -> 서버 측
-
-void updatePost(int sock) -> 클라이언트 측
-
-메뉴가 추가됨에 따라 서버 및 클라이언트 인터페이스 추가
-클라이언트 -> 서버 측으로 송신하는 명령 인터페이스 추가
-서버 -> 클라이언트 측에서 수신받는 명령 인터페이스 추가
-
-
----------------------------------11/25 0000 수정사항---------------------------------
-
-자잘한 코드 수정
-1.글 수정 명령 로직 수정
-2.중괄호 추가
-3.while문에 빠진 명령어 번호 인수 줄 추가
-
----------------------------------해야 할 작업들---------------------------------
-
-1. 각 명령들 제대로 동작하는 지 시뮬레이팅 필요
-2. 잠금 함수 살짝씩 손보기
-3. 게시글/댓글 추천 등 추천 기능 구현 -> 전체 게시글 시스템을 엎어야할듯?
-4. 각 함수가 어떻게 동작하는지 한번씩 읽어볼 필요 있음.
-5. 김성운
-6. 추가적인 기능 구현할거 생각나는거 있으면 여기에다 써놓으셈
-7. (이후 추가 예정)
-
-
+main : 서버에 연결 → 로그인/회원가입 루프 → 이후 메인 메뉴 반복 처리.
