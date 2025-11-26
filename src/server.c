@@ -609,6 +609,7 @@ void updatePost(int client_sock, int post_id, const char* nickname) {
 
     // 수정 가능함을 알림
     write(client_sock, "OK", 2);
+    sleep(1000); // 대기시간 추가
 
     char buffer[MAX_BUFFER];
 
