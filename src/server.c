@@ -16,15 +16,16 @@
 #define DATA_FILE "board_data.txt"
 #define USER_FILE "user_data.txt"
 #define COMMENT_FILE "comment_data.txt"
+#define ONLINE_FILE "online_users.txt"
+#define NOTIFICATION_FILE "notification_data.txt"
+#define MAX_NOTIFICATIONS 3000
 
 #define MAX_POSTS 100
 #define MAX_USERS 1000
 #define MAX_ONLINE 50
 #define MAX_COMMENTS 2000
 
-/* ===========================
- * 구조체 정의
- * =========================== */
+// 구조체 정의
 
 typedef struct {
     int id;
@@ -57,21 +58,24 @@ typedef struct {
     char timestamp[30];
 } Comment;
 
-/* ===========================
- * 전역 변수
- * =========================== */
+typedef struct {
+    int id;
+    char owner[50];      // 알림 받을 사람 닉네임 (글 작성자)
+    char message[200];   // 알림 내용
+    char timestamp[30];  // 알림 시간
+} Notification;
+
+// 전역 변수
 
 OnlineUser online_users[MAX_ONLINE];
 int online_count = 0;
 
 const char* bad_words[] = {
-    "욕설1", "욕설2", "바보", "멍청이", "병신", "시발", "개새끼", "fuck", "김성운", "shit",
+    "욕설1", "욕설2", "바보",
     NULL
 };
 
-/* ===========================
- * 공통 유틸리티
- * =========================== */
+// 공통 유틸리티
 
 void handleError(const char *message) {
     perror(message);
@@ -88,7 +92,7 @@ void getCurrentTime(char *buffer) {
     strftime(buffer, 30, "%Y-%m-%d %H:%M:%S", t);
 }
 
-/* 욕설 필터 */
+// 욕설 필터
 
 int containsBadWord(const char* text) {
     char lower_text[1000];
@@ -121,9 +125,7 @@ void maskBadWords(char* text) {
     }
 }
 
-/* ===========================
- * 사용자 관리
- * =========================== */
+// 사용자 관리
 
 int readUsers(User users[]) {
     FILE *fp = fopen(USER_FILE, "r");
@@ -199,42 +201,133 @@ int nicknameExists(const char* nickname) {
     return 0;
 }
 
-/* ===========================
- * 접속자 관리
- * =========================== */
+/*
+  파일 기반 접속자 관리 I/O
+  포맷: username|nickname|ip|login_time\n
+ */
 
-void addOnlineUser(const char* username, const char* nickname, const char* ip) {
-    if (online_count >= MAX_ONLINE) return;
+int readOnlineUsersFromFile(OnlineUser users[], int max_users) {
+    FILE *fp = fopen(ONLINE_FILE, "r");
+    int count = 0;
 
-    strcpy(online_users[online_count].username, username);
-    strcpy(online_users[online_count].nickname, nickname);
-    strcpy(online_users[online_count].ip, ip);
-    online_users[online_count].login_time = time(NULL);
-    online_count++;
+    if (fp == NULL) {
+        return 0;   // 파일 없으면 0명
+    }
 
-    printf("[접속자 추가] %s(%s) - 현재 접속자: %d명\n",
-           nickname, username, online_count);
+    flock(fileno(fp), LOCK_SH);
+
+    while (count < max_users) {
+        char uname[50], nick[50], ip[INET_ADDRSTRLEN];
+        long t;
+        int n = fscanf(fp, "%49[^|]|%49[^|]|%15[^|]|%ld\n",
+                       uname, nick, ip, &t);
+        if (n != 4) break;
+
+        strncpy(users[count].username, uname, 49);
+        users[count].username[49] = '\0';
+
+        strncpy(users[count].nickname, nick, 49);
+        users[count].nickname[49] = '\0';
+
+        strncpy(users[count].ip, ip, INET_ADDRSTRLEN - 1);
+        users[count].ip[INET_ADDRSTRLEN - 1] = '\0';
+
+        users[count].login_time = (time_t)t;
+        count++;
+    }
+
+    flock(fileno(fp), LOCK_UN);
+    fclose(fp);
+    return count;
 }
 
-void removeOnlineUser(const char* username) {
-    for (int i = 0; i < online_count; i++) {
-        if (strcmp(online_users[i].username, username) == 0) {
-            printf("[접속자 제거] %s(%s)\n",
-                   online_users[i].nickname, online_users[i].username);
+void saveOnlineUsersToFile(OnlineUser users[], int count) {
+    FILE *fp = fopen(ONLINE_FILE, "w");
+    if (fp == NULL) {
+        perror("온라인 유저 파일 열기 실패");
+        return;
+    }
 
-            for (int j = i; j < online_count - 1; j++) {
-                online_users[j] = online_users[j + 1];
-            }
-            online_count--;
-            printf("현재 접속자: %d명\n", online_count);
-            break;
+    flock(fileno(fp), LOCK_EX);
+
+    for (int i = 0; i < count; i++) {
+        fprintf(fp, "%s|%s|%s|%ld\n",
+                users[i].username,
+                users[i].nickname,
+                users[i].ip,
+                (long)users[i].login_time);
+    }
+
+    flock(fileno(fp), LOCK_UN);
+    fclose(fp);
+}
+
+
+ 
+//  접속자 관리
+
+void addOnlineUser(const char* username, const char* nickname, const char* ip) {
+    OnlineUser users[MAX_ONLINE];
+    int count = readOnlineUsersFromFile(users, MAX_ONLINE);
+
+    if (count >= MAX_ONLINE) {
+        printf("[접속자 추가 실패] 최대 접속자 수 초과\n");
+        return;
+    }
+
+    // 이미 로그인된 아이디면 중복 로그인 방지
+    for (int i = 0; i < count; i++) {
+        if (strcmp(users[i].username, username) == 0) {
+            printf("[중복 로그인 시도] %s (%s)\n", nickname, username);
+            return;
         }
+    }
+
+    strncpy(users[count].username, username, 49);
+    users[count].username[49] = '\0';
+    strncpy(users[count].nickname, nickname, 49);
+    users[count].nickname[49] = '\0';
+    strncpy(users[count].ip, ip, INET_ADDRSTRLEN - 1);
+    users[count].ip[INET_ADDRSTRLEN - 1] = '\0';
+    users[count].login_time = time(NULL);
+
+    count++;
+    saveOnlineUsersToFile(users, count);
+
+    printf("[접속자 추가] %s(%s) - 현재 접속자: %d명\n",
+           nickname, username, count);
+}
+
+
+void removeOnlineUser(const char* username) {
+    OnlineUser users[MAX_ONLINE];
+    int count = readOnlineUsersFromFile(users, MAX_ONLINE);
+    int newCount = 0;
+    char removed_nick[50] = "";
+    int removed = 0;
+
+    for (int i = 0; i < count; i++) {
+        if (!removed && strcmp(users[i].username, username) == 0) {
+            strncpy(removed_nick, users[i].nickname, 49);
+            removed_nick[49] = '\0';
+            removed = 1;
+            continue;   // 이 유저는 빼고 나머지만 복사
+        }
+        users[newCount++] = users[i];
+    }
+
+    saveOnlineUsersToFile(users, newCount);
+
+    if (removed) {
+        printf("[접속자 제거] %s(%s) - 현재 접속자: %d명\n",
+               removed_nick, username, newCount);
     }
 }
 
-/* ===========================
- * 회원가입 / 로그인 / 온라인 목록
- * =========================== */
+
+
+ // 회원가입 / 로그인 / 온라인 목록
+ 
 
 void registerUser(int client_sock) {
     char buffer[MAX_BUFFER];
@@ -322,6 +415,8 @@ int loginUser(int client_sock, char* username, char* nickname, const char* clien
 }
 
 void listOnlineUsers(int client_sock) {
+    OnlineUser users[MAX_ONLINE];
+    int count = readOnlineUsersFromFile(users, MAX_ONLINE);
     char buffer[MAX_BUFFER];
     int offset = 0;
     time_t now = time(NULL);
@@ -329,7 +424,7 @@ void listOnlineUsers(int client_sock) {
     offset += snprintf(buffer + offset, MAX_BUFFER - offset,
                        "========================================\n");
     offset += snprintf(buffer + offset, MAX_BUFFER - offset,
-                       "현재 접속자 목록 (%d명)\n", online_count);
+                       "현재 접속자 목록 (%d명)\n", count);
     offset += snprintf(buffer + offset, MAX_BUFFER - offset,
                        "========================================\n");
     offset += snprintf(buffer + offset, MAX_BUFFER - offset,
@@ -337,11 +432,11 @@ void listOnlineUsers(int client_sock) {
     offset += snprintf(buffer + offset, MAX_BUFFER - offset,
                        "----------------------------------------\n");
 
-    for (int i = 0; i < online_count && offset < MAX_BUFFER - 100; i++) {
-        int minutes = (int)((now - online_users[i].login_time) / 60);
+    for (int i = 0; i < count && offset < MAX_BUFFER - 100; i++) {
+        int minutes = (int)((now - users[i].login_time) / 60);
         offset += snprintf(buffer + offset, MAX_BUFFER - offset,
                            "%.15s\t%d분 전\n",
-                           online_users[i].nickname, minutes);
+                           users[i].nickname, minutes);
     }
 
     offset += snprintf(buffer + offset, MAX_BUFFER - offset,
@@ -350,10 +445,11 @@ void listOnlineUsers(int client_sock) {
     write(client_sock, buffer, offset);
 }
 
-/* ===========================
- * 게시글 파일 I/O
- * 포맷: id|title|author|content|timestamp|views|likes\n
- * =========================== */
+
+/*
+게시글 파일 I/O
+포맷: id|title|author|content|timestamp|views|likes\n
+*/
 
 int readPosts(Post posts[]) {
     FILE *fp = fopen(DATA_FILE, "r");
@@ -406,10 +502,10 @@ void savePosts(Post posts[], int count) {
     fclose(fp);
 }
 
-/* ===========================
- * 댓글 파일 I/O
- * 포맷: id|post_id|author|content|timestamp\n
- * =========================== */
+/*
+댓글 파일 I/O
+포맷: id|post_id|author|content|timestamp\n
+*/
 
 int readComments(Comment comments[]) {
     FILE *fp = fopen(COMMENT_FILE, "r");
@@ -458,9 +554,115 @@ void saveComments(Comment comments[], int count) {
     fclose(fp);
 }
 
-/* ===========================
- * 글 작성
- * =========================== */
+/*
+알림 파일 I/O
+포맷: id|owner|message|timestamp\n
+*/
+
+int readNotifications(Notification notis[]) {
+    FILE *fp = fopen(NOTIFICATION_FILE, "r");
+    int count = 0;
+
+    if (fp == NULL) return 0;
+
+    flock(fileno(fp), LOCK_SH);
+    while (count < MAX_NOTIFICATIONS &&
+           fscanf(fp, "%d|%49[^|]|%199[^|]|%29[^\n]\n",
+                  &notis[count].id,
+                  notis[count].owner,
+                  notis[count].message,
+                  notis[count].timestamp) == 4) {
+        count++;
+    }
+    flock(fileno(fp), LOCK_UN);
+    fclose(fp);
+    return count;
+}
+
+void saveNotifications(Notification notis[], int count) {
+    FILE *fp = fopen(NOTIFICATION_FILE, "w");
+    if (fp == NULL) {
+        perror("알림 파일 열기 실패");
+        return;
+    }
+
+    flock(fileno(fp), LOCK_EX);
+    for (int i = 0; i < count; i++) {
+        fprintf(fp, "%d|%s|%s|%s\n",
+                notis[i].id,
+                notis[i].owner,
+                notis[i].message,
+                notis[i].timestamp);
+    }
+    flock(fileno(fp), LOCK_UN);
+    fclose(fp);
+}
+
+void addNotification(const char* owner, const char* message) {
+    Notification notis[MAX_NOTIFICATIONS];
+    int count = readNotifications(notis);
+    if (count >= MAX_NOTIFICATIONS) return;
+
+    Notification n;
+    n.id = (count > 0) ? notis[count - 1].id + 1 : 1;
+
+    strncpy(n.owner, owner, 49);
+    n.owner[49] = '\0';
+
+    strncpy(n.message, message, 199);
+    n.message[199] = '\0';
+
+    getCurrentTime(n.timestamp);
+
+    notis[count] = n;
+    saveNotifications(notis, count + 1);
+}
+
+// 알림 확인 (해당 유저 것만 보여주고 삭제)
+void showNotifications(int client_sock, const char* nickname) {
+    Notification notis[MAX_NOTIFICATIONS];
+    int count = readNotifications(notis);
+
+    char buffer[MAX_BUFFER];
+    int offset = 0;
+    int found = 0;
+
+    offset += snprintf(buffer + offset, MAX_BUFFER - offset,
+                       "===== 알림 목록 =====\n");
+
+    for (int i = 0; i < count && offset < MAX_BUFFER - 100; i++) {
+        if (strcmp(notis[i].owner, nickname) == 0) {
+            found = 1;
+            offset += snprintf(buffer + offset, MAX_BUFFER - offset,
+                               "[%s]\n- %s\n\n",
+                               notis[i].timestamp,
+                               notis[i].message);
+        }
+    }
+
+    if (!found) {
+        offset += snprintf(buffer + offset, MAX_BUFFER - offset,
+                           "새 알림이 없습니다.\n");
+    }
+
+    write(client_sock, buffer, offset);
+
+    // 확인한 알림은 파일에서 제거
+    if (found) {
+        int newCount = 0;
+        for (int i = 0; i < count; i++) {
+            if (strcmp(notis[i].owner, nickname) != 0) {
+                notis[newCount++] = notis[i];
+            }
+        }
+        saveNotifications(notis, newCount);
+    }
+}
+
+
+/*
+글 작성
+*/
 
 void writePost(int client_sock, const char* nickname) {
     Post posts[MAX_POSTS];
@@ -518,9 +720,9 @@ void writePost(int client_sock, const char* nickname) {
           strlen("SUCCESS|게시글이 작성되었습니다.\n"));
 }
 
-/* ===========================
- * 글 목록
- * =========================== */
+/*
+글 목록
+*/
 
 void listPosts(int client_sock) {
     Post posts[MAX_POSTS];
@@ -529,35 +731,41 @@ void listPosts(int client_sock) {
     char buffer[MAX_BUFFER];
     int offset = 0;
 
-    offset += snprintf(buffer + offset, MAX_BUFFER - offset,
-                       "========================================\n");
-    offset += snprintf(buffer + offset, MAX_BUFFER - offset,
-                       "번호\t제목\t\t작성자\t\t추천수\t조회수\t작성시간\n");
-    offset += snprintf(buffer + offset, MAX_BUFFER - offset,
-                       "========================================\n");
+    // 테두리 라인 길게
+    const char *line = "================================================================================\n";
 
+    // 헤더
+    offset += snprintf(buffer + offset, MAX_BUFFER - offset, "%s", line);
+    offset += snprintf(buffer + offset, MAX_BUFFER - offset,
+                       "%-4s %-15s %-10s %-8s %-8s %-19s\n",
+                       "번호", "제목", "작성자", "         추천수", "  조회수", "작성시간");
+    offset += snprintf(buffer + offset, MAX_BUFFER - offset, "%s", line);
+
+    // 각 게시글 한 줄씩 출력
     for (int i = 0; i < count && offset < MAX_BUFFER - 100; i++) {
         offset += snprintf(buffer + offset, MAX_BUFFER - offset,
-                           "%d\t%.15s\t%.10s\t%d\t%d\t%s\n",
+                           "%4d %-15.15s %-10.10s %8d %8d %-19.19s\n",
                            posts[i].id,
                            posts[i].title,
                            posts[i].author,
-                           posts[i].likes,
-                           posts[i].views,
+                           posts[i].likes,   // 추천수
+                           posts[i].views,   // 조회수
                            posts[i].timestamp);
     }
 
-    offset += snprintf(buffer + offset, MAX_BUFFER - offset,
-                       "========================================\n");
+    // 마지막 줄 + 총 개수
+    offset += snprintf(buffer + offset, MAX_BUFFER - offset, "%s", line);
     offset += snprintf(buffer + offset, MAX_BUFFER - offset,
                        "총 %d개의 게시글\n", count);
 
     write(client_sock, buffer, offset);
 }
 
-/* ===========================
- * 댓글 출력 (특정 게시글)
- * =========================== */
+
+
+
+// 댓글 출력 (특정 게시글)
+
 
 int appendCommentsForPost(char *buffer, int offset, int max_len, int post_id) {
     Comment comments[MAX_COMMENTS];
@@ -594,9 +802,8 @@ int appendCommentsForPost(char *buffer, int offset, int max_len, int post_id) {
     return offset;
 }
 
-/* ===========================
- * 글 읽기 (조회수 증가 + 댓글 포함)
- * =========================== */
+
+// 글 읽기 (조회수 증가 + 댓글 포함)
 
 void readPost(int client_sock, int post_id) {
     Post posts[MAX_POSTS];
@@ -649,9 +856,9 @@ void readPost(int client_sock, int post_id) {
     write(client_sock, buffer, offset);
 }
 
-/* ===========================
- * 글 삭제
- * =========================== */
+
+//  글 삭제
+
 
 void deletePost(int client_sock, int post_id, const char* nickname) {
     Post posts[MAX_POSTS];
@@ -687,9 +894,9 @@ void deletePost(int client_sock, int post_id, const char* nickname) {
           strlen("SUCCESS|게시글이 삭제되었습니다.\n"));
 }
 
-/* ===========================
- * 글 수정
- * =========================== */
+
+// 글 수정
+
 
 void updatePost(int client_sock, int post_id, const char* nickname) {
     Post posts[MAX_POSTS];
@@ -750,12 +957,12 @@ void updatePost(int client_sock, int post_id, const char* nickname) {
 }
 
 /* ===========================
- * 댓글 작성
- * 명령: COMMENT:<post_id>
- * 프로토콜:
- *   서버: (post 확인 후) "CONTENT" 또는 "ERROR|..."
- *   클라: 댓글 내용 전송
- *   서버: SUCCESS / ERROR
+   댓글 작성
+   명령: COMMENT:<post_id>
+   프로토콜:
+    서버: (post 확인 후) "CONTENT" 또는 "ERROR|..."
+    클라: 댓글 내용 전송
+    서버: SUCCESS / ERROR
  * =========================== */
 
 void addComment(int client_sock, int post_id, const char* nickname) {
@@ -778,7 +985,7 @@ void addComment(int client_sock, int post_id, const char* nickname) {
         return;
     }
 
-    /* 댓글 배열 로드 */
+    // 댓글 배열 로드
     Comment comments[MAX_COMMENTS];
     int ccount = readComments(comments);
 
@@ -788,7 +995,7 @@ void addComment(int client_sock, int post_id, const char* nickname) {
         return;
     }
 
-    /* 클라이언트에 내용 요청 */
+    // 클라이언트에 내용 요청
     write(client_sock, "CONTENT", 7);
 
     int len = read(client_sock, buffer, MAX_BUFFER);
@@ -814,15 +1021,25 @@ void addComment(int client_sock, int post_id, const char* nickname) {
     comments[ccount] = newComment;
     saveComments(comments, ccount + 1);
 
+    comments[ccount] = newComment;
+    saveComments(comments, ccount + 1);
+
+    // 원글 작성자에게 알림 (자기 댓글은 제외)
+    if (strcmp(posts[found].author, nickname) != 0) {
+        char msg[200];
+        snprintf(msg, sizeof(msg),
+                 "'%s' 글에 %s님이 댓글을 남겼습니다.",
+                 posts[found].title, nickname);
+        addNotification(posts[found].author, msg);
+    }
+
     write(client_sock, "SUCCESS|댓글이 등록되었습니다.\n",
           strlen("SUCCESS|댓글이 등록되었습니다.\n"));
 }
 
-/* ===========================
- * 추천 기능
- * =========================== */
+ // 추천 기능
 
-void likePost(int client_sock, int post_id) {
+void likePost(int client_sock, int post_id, const char* liker_nickname) {
     Post posts[MAX_POSTS];
     int count = readPosts(posts);
 
@@ -843,21 +1060,32 @@ void likePost(int client_sock, int post_id) {
     posts[found].likes++;
     savePosts(posts, count);
 
+    /* 자기 글을 자기가 추천한 건 알림 안 보냄 */
+    if (strcmp(posts[found].author, liker_nickname) != 0) {
+        char msg[200];
+        snprintf(msg, sizeof(msg),
+                 "'%s' 글에 %s님이 추천을 남겼습니다.",
+                 posts[found].title, liker_nickname);
+        addNotification(posts[found].author, msg);
+    }
+
     write(client_sock, "SUCCESS|추천이 반영되었습니다.\n",
           strlen("SUCCESS|추천이 반영되었습니다.\n"));
 }
 
-/* ===========================
- * 인기글 정렬
- * =========================== */
 
-int cmpLikes(const void* a, const void* b) {
+
+ // 인기글 정렬 (조회수순)
+
+
+int cmpViews(const void* a, const void* b) {
     const Post* pa = (const Post*)a;
     const Post* pb = (const Post*)b;
-    if (pb->likes != pa->likes)
-        return pb->likes - pa->likes;
-    return pb->views - pa->views;
+    if (pb->views != pa->views)
+        return pb->views - pa->views;
+    return pb->likes - pa->likes;  // 조회수가 같으면 추천수로 정렬
 }
+
 
 void rankPosts(int client_sock) {
     Post posts[MAX_POSTS];
@@ -874,12 +1102,12 @@ void rankPosts(int client_sock) {
 
     Post tmp[MAX_POSTS];
     for (int i = 0; i < count; i++) tmp[i] = posts[i];
-    qsort(tmp, count, sizeof(Post), cmpLikes);
+    qsort(tmp, count, sizeof(Post), cmpViews);  
 
     offset += snprintf(buffer + offset, MAX_BUFFER - offset,
-                       "===== 추천순 인기글 =====\n");
+                       "===== 조회수순 인기글 =====\n");
     offset += snprintf(buffer + offset, MAX_BUFFER - offset,
-                       "번호\t제목\t\t추천수\t조회수\n");
+                       "번호\t제목\t\t조회수\t추천수\n");
     offset += snprintf(buffer + offset, MAX_BUFFER - offset,
                        "------------------------\n");
 
@@ -888,16 +1116,16 @@ void rankPosts(int client_sock) {
                            "%d\t%.15s\t%d\t%d\n",
                            tmp[i].id,
                            tmp[i].title,
-                           tmp[i].likes,
-                           tmp[i].views);
+                           tmp[i].views,   // 조회수를 먼저 표시
+                           tmp[i].likes);
     }
 
     write(client_sock, buffer, offset);
 }
 
-/* ===========================
- * 검색 기능
- * =========================== */
+
+ // 검색 기능
+
 
 void searchPosts(int client_sock, const char* keyword) {
     Post posts[MAX_POSTS];
@@ -933,9 +1161,9 @@ void searchPosts(int client_sock, const char* keyword) {
     write(client_sock, buffer, offset);
 }
 
-/* ===========================
- * 클라이언트 처리
- * =========================== */
+
+ // 클라이언트 처리
+
 
 void handleClient(int client_sock, char *client_ip) {
     char buffer[MAX_BUFFER];
@@ -1000,13 +1228,16 @@ void handleClient(int client_sock, char *client_ip) {
         else if (strncmp(buffer, "ONLINE", 6) == 0) {
             listOnlineUsers(client_sock);
         }
+        else if (strncmp(buffer, "NOTI", 4) == 0) {
+            showNotifications(client_sock, nickname);
+        }
         else if (strncmp(buffer, "UPDATE:", 7) == 0) {
             int post_id = atoi(buffer + 7);
             updatePost(client_sock, post_id, nickname);
         }
         else if (strncmp(buffer, "LIKE:", 5) == 0) {
             int post_id = atoi(buffer + 5);
-            likePost(client_sock, post_id);
+            likePost(client_sock, post_id, nickname);
         }
         else if (strncmp(buffer, "RANK", 4) == 0) {
             rankPosts(client_sock);
@@ -1030,16 +1261,21 @@ void handleClient(int client_sock, char *client_ip) {
     exit(0);
 }
 
-/* ===========================
- * main
- * =========================== */
+
+ // main
+
 
 int main(int argc, char *argv[]) {
     int server_sock, client_sock;
     struct sockaddr_in server_addr, client_addr;
     socklen_t client_addr_size;
     pid_t pid;
-
+    // 서버 시작 시 접속자 파일 비우기
+    FILE *fp = fopen(ONLINE_FILE, "w");
+    if (fp != NULL) {
+        fclose(fp);
+    }
+    
     signal(SIGCHLD, sigchld_handler);
 
     server_sock = socket(AF_INET, SOCK_STREAM, 0);

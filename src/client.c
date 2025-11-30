@@ -59,18 +59,18 @@ void printMainMenu() {
     printf("4. 글 수정\n");
     printf("5. 글 삭제\n");
     printf("6. 접속자 목록\n");
-    printf("7. 로그아웃\n");
-    printf("8. 글 추천\n");
-    printf("9. 인기글 보기(추천순)\n");
-    printf("10. 글 검색\n");
-    printf("11. 댓글 달기\n");
+    printf("7. 글 추천\n");
+    printf("8. 인기글 보기(조회수순)\n");
+    printf("9. 글 검색\n");
+    printf("10. 댓글 달기\n");
+    printf("11. 알림 확인\n");
+    printf("12. 로그아웃\n");   
     printf("========================================\n");
     printf("선택: ");
 }
 
-/* ===========================
- * 회원가입
- * =========================== */
+
+// 회원가입
 
 void registerUser(int sock) {
     char buffer[MAX_BUFFER];
@@ -105,9 +105,7 @@ void registerUser(int sock) {
     }
 }
 
-/* ===========================
- * 로그인
- * =========================== */
+// 로그인
 
 int loginUser(int sock) {
     char buffer[MAX_BUFFER];
@@ -138,9 +136,7 @@ int loginUser(int sock) {
     }
 }
 
-/* ===========================
- * 글 작성
- * =========================== */
+// 글 작성
 
 void writePostClient(int sock) {
     char buffer[MAX_BUFFER];
@@ -177,9 +173,7 @@ void writePostClient(int sock) {
     }
 }
 
-/* ===========================
- * 글 목록
- * =========================== */
+// 글 목록
 
 void listPostsClient(int sock) {
     char buffer[MAX_BUFFER];
@@ -192,9 +186,7 @@ void listPostsClient(int sock) {
     printf("\n%s\n", buffer);
 }
 
-/* ===========================
- * 글 읽기 (댓글 포함)
- * =========================== */
+// 글 읽기 ( 댓글 포함 )
 
 void readPostClient(int sock) {
     char buffer[MAX_BUFFER];
@@ -213,9 +205,7 @@ void readPostClient(int sock) {
     printf("\n%s\n", buffer);
 }
 
-/* ===========================
- * 글 삭제
- * =========================== */
+// 글 삭제
 
 void deletePostClient(int sock) {
     char buffer[MAX_BUFFER];
@@ -248,9 +238,7 @@ void deletePostClient(int sock) {
     }
 }
 
-/* ===========================
- * 글 수정
- * =========================== */
+// 글 수정
 
 void updatePostClient(int sock) {
     char buffer[MAX_BUFFER];
@@ -299,9 +287,7 @@ void updatePostClient(int sock) {
     }
 }
 
-/* ===========================
- * 접속자 목록
- * =========================== */
+// 접속자 목록
 
 void listOnlineUsersClient(int sock) {
     char buffer[MAX_BUFFER];
@@ -314,9 +300,7 @@ void listOnlineUsersClient(int sock) {
     printf("\n%s\n", buffer);
 }
 
-/* ===========================
- * 추천
- * =========================== */
+// 게시물 추천
 
 void likePostClient(int sock) {
     char buffer[MAX_BUFFER];
@@ -339,9 +323,7 @@ void likePostClient(int sock) {
     }
 }
 
-/* ===========================
- * 인기글
- * =========================== */
+// 인기글
 
 void rankPostsClient(int sock) {
     char buffer[MAX_BUFFER];
@@ -354,9 +336,7 @@ void rankPostsClient(int sock) {
     printf("\n%s\n", buffer);
 }
 
-/* ===========================
- * 검색
- * =========================== */
+// 검색 (키워드)
 
 void searchPostsClient(int sock) {
     char buffer[MAX_BUFFER];
@@ -375,9 +355,20 @@ void searchPostsClient(int sock) {
     printf("\n%s\n", buffer);
 }
 
-/* ===========================
- * 댓글 달기
- * =========================== */
+// 알림 확인
+
+void showNotificationsClient(int sock) {
+    char buffer[MAX_BUFFER];
+
+    write(sock, "NOTI", 4);
+
+    int len = read(sock, buffer, MAX_BUFFER);
+    buffer[len] = '\0';
+
+    printf("\n%s\n", buffer);
+}
+
+// 댓글 달기
 
 void commentPostClient(int sock) {
     char buffer[MAX_BUFFER];
@@ -421,9 +412,6 @@ void commentPostClient(int sock) {
     }
 }
 
-/* ===========================
- * main
- * =========================== */
 
 int main(int argc, char* argv[]) {
     int client_sock;
@@ -512,27 +500,31 @@ int main(int argc, char* argv[]) {
             listOnlineUsersClient(client_sock);
             break;
         case 7:
+            likePostClient(client_sock);
+            break;
+        case 8:
+            rankPostsClient(client_sock);
+            break;
+        case 9:
+            searchPostsClient(client_sock);
+            break;
+        case 10:
+            commentPostClient(client_sock);
+            break;
+        case 11:
+            showNotificationsClient(client_sock);
+            break;
+        case 12:  
             write(client_sock, "QUIT", 4);
             read(client_sock, buffer, MAX_BUFFER);
             printf("\n로그아웃되었습니다. 안녕히 가세요!\n");
             close(client_sock);
             return 0;
-        case 8:
-            likePostClient(client_sock);
-            break;
-        case 9:
-            rankPostsClient(client_sock);
-            break;
-        case 10:
-            searchPostsClient(client_sock);
-            break;
-        case 11:
-            commentPostClient(client_sock);
-            break;
         default:
             printf("\n잘못된 선택입니다. 다시 선택해주세요.\n");
         }
     }
+
 
     close(client_sock);
     return 0;
