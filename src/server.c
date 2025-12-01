@@ -25,6 +25,9 @@
 #define MAX_ONLINE 50
 #define MAX_COMMENTS 2000
 
+int g_server_sock = -1;      // 서버 리스닝 소켓
+int g_current_client_sock = -1;  // 현재 처리 중인 클라이언트 소켓 (자식 프로세스에서 사용)
+
 // 구조체 정의
 
 typedef struct {
@@ -84,6 +87,17 @@ void handleError(const char *message) {
 
 void sigchld_handler(int sig) {
     while (waitpid(-1, NULL, WNOHANG) > 0);
+}
+
+void sigint_handler(int sig) {
+    printf("\n[서버] SIGINT 수신, 서버를 종료합니다...\n");
+
+    if (g_server_sock != -1) {
+        close(g_server_sock);
+        g_server_sock = -1;
+    }
+
+    exit(0);   // 모든 프로세스 종료
 }
 
 void getCurrentTime(char *buffer) {
@@ -1277,11 +1291,13 @@ int main(int argc, char *argv[]) {
     }
     
     signal(SIGCHLD, sigchld_handler);
-
+    signal(SIGINT, sigint_handler);
+    
     server_sock = socket(AF_INET, SOCK_STREAM, 0);
     if (server_sock == -1) {
         handleError("socket() error");
     }
+    g_server_sock = server_sock;
 
     int option = 1;
     setsockopt(server_sock, SOL_SOCKET, SO_REUSEADDR, &option, sizeof(option));
@@ -1329,8 +1345,13 @@ int main(int argc, char *argv[]) {
             close(client_sock);
             continue;
         } else if (pid == 0) {
+            signal(SIGINT, SIG_DFL);
+            
             close(server_sock);
             handleClient(client_sock, client_ip);
+            
+            close(client_sock);
+            _exit(0);
         } else {
             close(client_sock);
             printf("[부모 프로세스] 자식 프로세스 생성 (PID: %d)\n", pid);
