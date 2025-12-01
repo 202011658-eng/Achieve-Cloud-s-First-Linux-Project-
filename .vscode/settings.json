@@ -1,0 +1,6 @@
+{
+    "files.associations": {
+        "server_util.h": "c",
+        "server_user_manager.h": "c"
+    }
+}
