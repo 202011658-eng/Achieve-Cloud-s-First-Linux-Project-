@@ -1,103 +1,240 @@
-다음에 할일 !! 
-{ 댓글 게시물 알람 추가하고 비밀번호 보안강화 추가하고 코드 다듬기 }
+==============접속자 목록 다른 사용자가 봤을때는 업데이트 안되던 문제===================
 
-🖥 server.c 함수 정리 (간단 버전)
+서버는 fork() 해서 프로세스마다 online_users[] 전역배열이 따로 생기기 때문에,
+접속자 목록이 프로세스마다 달라지고(ONLINE 깨짐), 중복 로그인 막는 것도 완전하지가 않아.
 
+그래서 **“접속자 = 파일에 저장”**하는 방식으로 바꾸면:
 
-handleError : 에러 메시지 출력하고 서버 바로 종료.
+모든 자식 프로세스가 같은 파일을 보니까,
 
-sigchld_handler : 자식 프로세스 좀비 안 남게 회수.
+ONLINE 명령이 항상 전체 접속자를 보고,
 
-getCurrentTime : 현재 시간을 "YYYY-MM-DD HH:MM:SS" 문자열로 만들어줌.
+중복 로그인 체크도 파일을 기준으로 하면 확실해져서 수정함. (보고서에 쓸것)
+===================================================================================
 
-containsBadWord : 문자열에 욕설(금지어) 있는지 검사.
+========동시 접근 잠금으로 충돌 방지는==============
 
-maskBadWords : 문자열 안 욕설 부분을 *로 가려줌.
+게시판 데이터는 서버 측 board_data.txt 파일에 저장한다.
 
-readUsers : user_data.txt에서 회원 목록 읽어오기.
+모든 게시글 관련 연산(작성, 수정, 삭제, 조회, 추천 등)은
+readPosts() 및 savePosts()를 통해서만 파일에 접근한다.
 
-saveUser : 새 회원 한 명을 user_data.txt에 추가해서 저장.
+readPosts()에서는 flock(fd, LOCK_SH)를 사용하여 공유 잠금을 걸어
+여러 프로세스가 동시에 읽을 수 있도록 하되, 쓰기 중에는 대기하도록 한다.
 
-userExists : 아이디가 이미 존재하는지 확인.
+savePosts()에서는 flock(fd, LOCK_EX)로 배타 잠금을 걸어
+동시에 여러 프로세스가 board_data.txt에 쓰지 못하도록 하여
+파일 손상 및 충돌을 방지한다.
 
-authenticateUser : 아이디+비번이 맞는 계정인지 확인하고 닉네임 돌려줌.
+서버는 fork()를 사용해 다중 클라이언트를 처리하므로,
+프로세스 간 동기화는 커널 수준 파일 잠금(flock)을 활용한다.
+==========================================================
 
-nicknameExists : 닉네임이 이미 존재하는지 확인.
+================나머지 추가로 구현한 것들===================
+1. 자신이 작성한 게시물이 아니면 수정 불가하도록
+2. 자신이 작성한 게시물에 다른 사용자가 추천이나 댓글을 달면 알람이 가도록
+3. 글 목록 보기 하면 글자 튀어나오던거 정리했음
+4. 인기글 보기 추천순이던거 조회수 순으로 바꾸고 조회수가 같으면 추천순으로 정렬하도록 했음
+5. 게시물 읽기 하면 그 게시물에 달린 댓글까지 보이도록 했음
+6. 중복 로그인 방지
+===========================================================
 
-addOnlineUser : 로그인한 유저를 온라인 사용자 목록에 추가.
+🖥 server.c 함수 목록
+공통 유틸 / 필터
 
-removeOnlineUser : 로그아웃/끊긴 유저를 온라인 목록에서 제거.
+handleError(const char *message)
+→ 시스템 콜 에러가 났을 때 perror 찍고 서버 프로세스를 종료한다.
 
-listOnlineUsers : 현재 접속 중인 유저 목록을 문자열로 만들어 클라이언트에 전송.
+sigchld_handler(int sig)
+→ fork로 만든 자식 프로세스가 끝났을 때 좀비 프로세스를 정리해준다.
 
-readPosts : board_data.txt에서 게시글들을 읽어 배열에 채움.
+getCurrentTime(char *buffer)
+→ 현재 시간을 "YYYY-MM-DD HH:MM:SS" 문자열로 만들어 넣어준다.
 
-savePosts : 게시글 배열 전체를 board_data.txt에 저장(덮어쓰기).
+containsBadWord(const char* text)
+→ 문자열에 욕설(금지어) 리스트에 있는 단어가 포함되어 있는지 검사해서 있으면 1을 리턴한다.
 
-readComments (댓글 기능 버전) : comment_data.txt에서 댓글 목록 읽기.
+maskBadWords(char* text)
+→ 문자열 안에 있는 금지어 부분을 * 문자로 모두 가린다.
 
-saveComments (댓글 기능 버전) : 댓글 목록 전체를 comment_data.txt에 저장.
+사용자 관리 (회원가입/로그인)
 
-writePost : 클라이언트와 주고받으면서 새 글 작성해서 파일에 저장.
+int readUsers(User users[])
+→ user_data.txt에서 모든 사용자 정보를 읽어 배열에 채우고 사용자 수를 돌려준다.
 
-listPosts : 게시글 목록(번호/제목/작성자/조회수 등) 만들어서 보내줌.
+void saveUser(User* user)
+→ 새 사용자 정보를 user_data.txt 마지막 줄에 추가 저장한다.
 
-appendCommentsForPost (댓글 기능) : 특정 게시글의 댓글들을 출력 문자열 뒤에 붙임.
+int userExists(const char* username)
+→ 같은 아이디(username)를 가진 사용자가 이미 존재하는지 검사한다.
 
-readPost : 게시글 하나 찾아서 조회수 1 올리고, 본문 + 댓글까지 묶어서 보내줌.
+int authenticateUser(const char* username, const char* password, char* nickname)
+→ 아이디/비밀번호가 일치하는 사용자를 찾아 로그인 검증하고, 성공 시 그 닉네임을 돌려준다.
 
-deletePost : 본인이 쓴 글인지 확인 후, 해당 게시글 삭제.
+int nicknameExists(const char* nickname)
+→ 같은 닉네임을 가진 사용자가 이미 있는지 검사한다.
 
-updatePost : 본인이 쓴 글인지 확인 후, 제목/내용 새로 받아서 수정.
+파일 기반 접속자 관리
 
-addComment (댓글 기능) : 댓글 내용 받아서 해당 게시글에 댓글 하나 추가.
+int readOnlineUsersFromFile(OnlineUser users[], int max_users)
+→ online_users.txt에서 현재 접속자 목록을 읽어 배열에 채우고 인원 수를 리턴한다.
 
-likePost : 게시글 추천수 +1 하고 저장.
+void saveOnlineUsersToFile(OnlineUser users[], int count)
+→ 메모리에 있는 접속자 배열을 online_users.txt에 모두 덮어쓴다.
 
-cmpLikes : 추천순(추천 많고, 조회수 많은 순) 정렬에 쓰이는 비교 함수(qsort용).
+void addOnlineUser(const char* username, const char* nickname, const char* ip)
+→ 중복 로그인 여부를 확인한 뒤, 새 접속자를 메모리 배열과 파일에 추가한다.
 
-rankPosts : 게시글들을 추천수 기준으로 정렬해서 인기글 TOP10 보내줌.
+void removeOnlineUser(const char* username)
+→ 해당 아이디를 가진 접속자를 목록에서 제거하고 파일도 업데이트한다.
 
-searchPosts : 제목/내용/작성자에 키워드가 들어간 글만 찾아서 목록으로 보내줌.
+회원가입 / 로그인 / 접속자 목록
 
-handleClient : 한 클라이언트랑 전체 통신 처리(로그인/글쓰기/삭제/댓글 등 명령 분기).
+void registerUser(int client_sock)
+→ 클라이언트와 통신하며 아이디·비밀번호·닉네임을 입력받아 유효성 검사 후 회원가입을 처리한다.
 
-main : 서버 소켓 만들고 accept+fork로 클라이언트 받는 메인 루프.
+int loginUser(int client_sock, char* username, char* nickname, const char* client_ip)
+→ 클라이언트로부터 아이디/비밀번호를 받아 인증하고, 성공 시 접속자 목록에 추가하며 1을 리턴한다.
 
+void listOnlineUsers(int client_sock)
+→ 파일 기반 접속자 목록을 읽어서 현재 접속자 닉네임과 접속 경과 시간을 클라이언트에 출력해 준다.
 
-💻 client.c 함수 정리 (간단 버전)
+게시글 파일 I/O
 
+int readPosts(Post posts[])
+→ board_data.txt에서 모든 게시글을 읽어 배열에 채우고 게시글 개수를 리턴한다.
 
-handleError : 에러 메시지 출력하고 클라이언트 종료.
+void savePosts(Post posts[], int count)
+→ 게시글 배열 전체를 board_data.txt에 다시 써서 저장한다(쓰기 락으로 동시접근 보호).
 
-getPassword : 비밀번호 입력받을 때 화면에 *로만 찍히게 입력 처리.
+댓글 파일 I/O
 
-printInitialMenu : 로그인/회원가입/종료 초기 메뉴를 출력.
+int readComments(Comment comments[])
+→ comment_data.txt에서 모든 댓글을 읽어 배열에 채우고 댓글 개수를 리턴한다.
 
-printMainMenu : 글/댓글/추천 등 메인 메뉴를 출력.
+void saveComments(Comment comments[], int count)
+→ 댓글 배열 전체를 comment_data.txt에 덮어써서 저장한다.
 
-registerUser : 서버와 통신하며 아이디/비번/닉네임 보내서 회원가입.
+알림 파일 I/O / 알림 기능
 
-loginUser : 아이디/비번 보내서 로그인 시도, 성공 여부 리턴.
+int readNotifications(Notification notis[])
+→ notification_data.txt에서 모든 알림을 읽어 배열에 채우고 알림 개수를 리턴한다.
 
-writePostClient : 제목/내용 입력받아서 서버에 새 글 작성 요청.
+void saveNotifications(Notification notis[], int count)
+→ 알림 배열 전체를 notification_data.txt에 덮어써서 저장한다.
 
-listPostsClient : 서버에 목록 요청해서 그대로 출력.
+void addNotification(const char* owner, const char* message)
+→ 특정 유저(owner)에게 보낼 새 알림 한 개를 만들어 파일에 추가한다.
 
-readPostClient : 글 번호 입력→ 서버에 READ 요청→ 글 내용+댓글 출력.
+void showNotifications(int client_sock, const char* nickname)
+→ 해당 유저에게 도착한 알림들을 모두 출력해 주고, 출력된 알림은 파일에서 삭제한다.
 
-deletePostClient : 글 번호, 삭제 확인 받고 서버에 삭제 요청.
+게시글 관련 기능
 
-updatePostClient : 글 번호, 새 제목/내용 입력해서 서버에 수정 요청.
+void writePost(int client_sock, const char* nickname)
+→ 클라이언트에서 제목·내용을 받아 욕설 필터링 후 새 게시글을 생성하고 저장한다.
 
-listOnlineUsersClient : 현재 접속자 목록 요청해서 출력.
+void listPosts(int client_sock)
+→ 모든 게시글의 번호·제목·작성자·추천수·조회수·작성시간을 표 형식으로 클라이언트에 보내준다.
 
-likePostClient : 글 번호 입력해서 추천 요청.
+int appendCommentsForPost(char *buffer, int offset, int max_len, int post_id)
+→ 특정 게시글 번호에 해당하는 댓글들을 버퍼에 이어 붙여 출력 형식으로 만들어 준다.
 
-rankPostsClient : 인기글(추천순) 목록 요청해서 출력.
+void readPost(int client_sock, int post_id)
+→ 지정한 게시글 번호를 찾아 조회수를 1 증가시키고, 게시글 내용과 댓글 목록까지 한 번에 보여준다.
 
-searchPostsClient : 키워드 입력해서 검색 결과 목록 출력.
+void deletePost(int client_sock, int post_id, const char* nickname)
+→ 작성자 본인인지 확인한 후 해당 게시글을 목록에서 삭제한다.
 
-commentPostClient (댓글 기능) : 게시글 번호 + 댓글 내용 입력해서 서버에 댓글 작성 요청.
+void updatePost(int client_sock, int post_id, const char* nickname)
+→ 작성자 본인 확인과 욕설 필터링을 거쳐 제목/내용을 수정하고 수정 시간을 갱신한다.
 
-main : 서버에 연결 → 로그인/회원가입 루프 → 이후 메인 메뉴 반복 처리.
+댓글 / 추천 / 인기글 / 검색
+
+void addComment(int client_sock, int post_id, const char* nickname)
+→ 게시글 존재 여부 확인 후 댓글 내용을 받아 저장하고, 원글 작성자에게 알림을 추가한다.
+
+void likePost(int client_sock, int post_id, const char* liker_nickname)
+→ 해당 게시글의 추천수를 1 증가시키고, 본인이 아닌 다른 사람 글이면 작성자에게 추천 알림을 보낸다.
+
+int cmpViews(const void* a, const void* b)
+→ 게시글을 정렬할 때 조회수 기준으로 내림차순, 같으면 추천수 기준으로 비교하는 비교 함수다.
+
+void rankPosts(int client_sock)
+→ 게시글을 조회수 기준으로 정렬해서 상위 인기글 목록을 클라이언트에 보여준다.
+
+void searchPosts(int client_sock, const char* keyword)
+→ 제목/내용/작성자에 키워드가 포함된 게시글만 찾아 간단한 정보 목록으로 보여준다.
+
+클라이언트 처리 / 메인
+
+void handleClient(int client_sock, char *client_ip)
+→ 하나의 클라이언트 소켓에 대해 로그인 상태를 관리하며, 각종 명령(WRITE/READ/UPDATE/…/COMMENT)을 분기 처리한다.
+
+int main(int argc, char *argv[])
+→ 서버 소켓을 열고 fork()로 클라이언트를 각각 자식 프로세스에서 처리하는 메인 루프를 수행한다.
+
+💻 client.c 함수 목록
+유틸 / 메뉴
+
+handleError(const char* message)
+→ 클라이언트 쪽에서 소켓 관련 에러가 나면 메시지 출력 후 프로그램을 종료한다.
+
+getPassword(char* password, int max_len)
+→ 터미널 에코를 끄고 사용자가 비밀번호를 입력하면 *만 표시하면서 안전하게 읽어온다.
+
+printInitialMenu()
+→ 로그인/회원가입/종료로 구성된 초기 메뉴를 화면에 출력한다.
+
+printMainMenu()
+→ 로그인 후 사용할 게시판 메인 메뉴(글쓰기, 목록, 읽기, 수정, 삭제, 추천, 검색, 댓글, 알림, 로그아웃)를 출력한다.
+
+인증 / 회원가입
+
+void registerUser(int sock)
+→ 서버와 통신하면서 아이디·비밀번호·닉네임을 입력받아 회원가입 요청을 보내고 결과를 출력한다.
+
+int loginUser(int sock)
+→ 아이디와 비밀번호를 서버로 보내 로그인 요청을 하고, 성공 여부에 따라 1 또는 0을 리턴한다.
+
+게시글 관련 클라이언트 기능
+
+void writePostClient(int sock)
+→ 제목과 내용을 입력받아 서버에 새 글 작성 요청을 보내고 성공/실패 메시지를 출력한다.
+
+void listPostsClient(int sock)
+→ 서버에 글 목록 요청(LIST)을 보내고 전달받은 목록 문자열을 그대로 출력한다.
+
+void readPostClient(int sock)
+→ 읽을 게시글 번호를 입력받아 서버에 READ:<id> 요청을 보내고 본문+댓글을 화면에 보여준다.
+
+void deletePostClient(int sock)
+→ 삭제할 게시글 번호와 삭제 여부(y/n)를 확인한 뒤 서버에 삭제 요청을 보내고 결과를 출력한다.
+
+void updatePostClient(int sock)
+→ 수정할 게시글 번호를 입력받고, 서버가 허용하면 새 제목·내용을 보내 글 수정 요청을 처리한다.
+
+접속자 / 추천 / 인기글 / 검색 / 알림 / 댓글
+
+void listOnlineUsersClient(int sock)
+→ 서버에 ONLINE 명령을 보내 현재 접속자 목록을 받아 출력한다.
+
+void likePostClient(int sock)
+→ 추천할 게시글 번호를 입력받아 LIKE:<id> 요청을 보내고 결과 메시지를 출력한다.
+
+void rankPostsClient(int sock)
+→ 서버에 RANK 명령을 보내 조회수순 인기글 목록을 받아 출력한다.
+
+void searchPostsClient(int sock)
+→ 검색 키워드를 입력받아 SEARCH:<keyword> 요청을 보내고 검색 결과를 출력한다.
+
+void showNotificationsClient(int sock)
+→ 서버에 NOTI 명령을 보내 현재 로그인한 사용자에게 온 알림 목록을 받아 출력한다.
+
+void commentPostClient(int sock)
+→ 댓글을 달 게시글 번호를 입력한 뒤 서버와 COMMENT 프로토콜로 통신하여 댓글 내용을 보내고 결과를 출력한다.
+
+메인 함수
+
+int main(int argc, char* argv[])
+→ 서버 IP를 인자로 받아 접속을 맺고, 초기 메뉴(로그인/회원가입)와 메인 메뉴를 반복 출력하면서 사용자의 선택에 따라 각 기능 함수를 호출한다.
