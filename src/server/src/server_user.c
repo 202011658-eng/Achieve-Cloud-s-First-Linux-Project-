@@ -5,8 +5,8 @@
 #include <sys/file.h>
 #include <arpa/inet.h>
 #include "../common.h"
-#include "server_user_manager.h"
-#include "server_util.h"
+#include "../header/server_user.h"
+#include "../header/server_util.h"
 
 // 전역 변수 (접속자 관리용)
 OnlineUser online_users[MAX_ONLINE];

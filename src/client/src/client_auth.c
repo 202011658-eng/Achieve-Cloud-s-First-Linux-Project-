@@ -2,8 +2,8 @@
 #include <string.h>
 #include <unistd.h>
 #include "../common.h"
-#include "auth_client.h"
-#include "client_utils.h"
+#include "../header/client_auth.h"
+#include "../header/client_util.h"
 
 void registerUser(int sock) {
     char buffer[MAX_BUFFER];

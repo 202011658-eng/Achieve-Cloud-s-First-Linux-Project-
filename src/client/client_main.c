@@ -5,9 +5,9 @@
 #include <arpa/inet.h>
 #include <sys/socket.h>
 #include "../common.h"
-#include "client_utils.h"
-#include "auth_client.h"
-#include "board_client.h"
+#include "header/client_auth.h"
+#include "header/client_board.h"
+#include "header/client_util.h"
 
 void printInitialMenu() {
     printf("\n========================================\n");

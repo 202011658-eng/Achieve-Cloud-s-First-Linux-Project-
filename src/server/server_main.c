@@ -6,10 +6,10 @@
 #include <sys/socket.h>
 #include <signal.h>
 #include "../common.h"
-#include "server_util.h"
-#include "server_user_manager.h"
-#include "server_board_manager.h"
-#include "server_noti_manager.h"
+#include "header/server_util.h"
+#include "header/server_user.h"
+#include "header/server_board.h"
+#include "header/server_noti.h"
 
 void handleClient(int client_sock, char *client_ip) {
     char buffer[MAX_BUFFER];
