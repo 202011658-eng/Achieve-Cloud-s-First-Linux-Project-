@@ -1121,7 +1121,7 @@ void rankPosts(int client_sock) {
     offset += snprintf(buffer + offset, MAX_BUFFER - offset,
                        "===== 조회수순 인기글 =====\n");
     offset += snprintf(buffer + offset, MAX_BUFFER - offset,
-                       "번호\t제목\t\t조회수\t추천수\n");
+                       "번호\t제목\t조회수\t추천수\n");
     offset += snprintf(buffer + offset, MAX_BUFFER - offset,
                        "------------------------\n");
 
