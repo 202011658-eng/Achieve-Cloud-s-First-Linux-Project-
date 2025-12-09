@@ -4,10 +4,10 @@
 #include <unistd.h>
 #include <arpa/inet.h>
 #include <sys/socket.h>
-#include "../common.h"
-#include "header/client_auth.h"
-#include "header/client_board.h"
-#include "header/client_util.h"
+#include "common.h"
+#include "client/header/client_auth.h"
+#include "client/header/client_board.h"
+#include "client/header/client_util.h"
 
 void printInitialMenu() {
     printf("\n========================================\n");

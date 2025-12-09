@@ -2,7 +2,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <termios.h>
-#include "../header/client_util.h"
+#include "client/header/client_util.h"
 
 void handleError(const char* message) {
     perror(message);

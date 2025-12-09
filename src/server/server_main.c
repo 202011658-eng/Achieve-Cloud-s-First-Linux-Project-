@@ -5,11 +5,11 @@
 #include <arpa/inet.h>
 #include <sys/socket.h>
 #include <signal.h>
-#include "../common.h"
-#include "header/server_util.h"
-#include "header/server_user.h"
-#include "header/server_board.h"
-#include "header/server_noti.h"
+#include "common.h"
+#include "server/header/server_util.h"
+#include "server/header/server_user.h"
+#include "server/header/server_board.h"
+#include "server/header/server_noti.h"
 
 int g_server_sock = -1;
 

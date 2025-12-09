@@ -1,7 +1,7 @@
 #ifndef BOARD_MANAGER_H
 #define BOARD_MANAGER_H
 
-#include "../common.h"
+#include "common.h"
 
 // server_board_manager.h : 서버 게시판 관리 헤더 파일
 

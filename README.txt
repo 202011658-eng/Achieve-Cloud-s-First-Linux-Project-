@@ -81,12 +81,61 @@ commentPostClient() -> 댓글 작성
 
 ==============================25/12/09 수정사항==============================
 sigint_handler -> server_main.c 파일에 추가
-
-시뮬레이션 필요 (중요);
-MakeFile 및 추가 검수 -> 오늘 안에 진행 예정
+-> 서버 종료 시 서버가 종료되었음을 표시
 
 
-해야할 일 -> 발표 ppt 작성 및 발표 준비;
+MakeFile 내용 :
+
+# 컴파일러 설정
+CC = gcc
+CFLAGS = -Wall -g
+INCLUDES = -I.
+
+# 서버 소스 파일
+SERVER_SRC = server/server_main.c \
+             server/src/server_util.c \
+             server/src/server_user.c \
+             server/src/server_board.c \
+             server/src/server_noti.c
+
+# 클라이언트 소스 파일
+CLIENT_SRC = client/client_main.c \
+             client/src/client_util.c \
+             client/src/client_auth.c \
+             client/src/client_board.c
+
+# 빌드
+all: board_server board_client
+
+board_server: $(SERVER_SRC)
+	$(CC) $(CFLAGS) $(INCLUDES) -o board_server $(SERVER_SRC)
+
+board_client: $(CLIENT_SRC)
+	$(CC) $(CFLAGS) $(INCLUDES) -o board_client $(CLIENT_SRC)
+
+# 삭제
+clean:
+	rm -f board_server board_client
+
+빌드하는법 :
+# 전체 빌드
+make
+
+# 서버만 빌드
+make board_server
+
+# 클라이언트만 빌드
+make board_client
+
+# 실행 파일 삭제
+make clean
+
+실행:
+# 서버 실행
+./board_server
+
+# 클라이언트 실행 (다른 터미널)
+./board_client 127.0.0.1
 
 
 

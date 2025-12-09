@@ -4,9 +4,9 @@
 #include <unistd.h>
 #include <sys/file.h>
 #include <arpa/inet.h>
-#include "../../common.h"
-#include "../header/server_user.h"
-#include "../header/server_util.h"
+#include "common.h"
+#include "server/header/server_user.h"
+#include "server/header/server_util.h"
 
 // 전역 변수 (접속자 관리용)
 OnlineUser online_users[MAX_ONLINE];

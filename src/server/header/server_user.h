@@ -1,7 +1,7 @@
 #ifndef USER_MANAGER_H
 #define USER_MANAGER_H
 
-#include "../common.h"
+#include "common.h"
 
 // server_user_manager.h : 서버 사용자 관리 헤더 파일
 

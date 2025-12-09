@@ -5,8 +5,8 @@
 #include <ctype.h>
 #include <time.h>
 #include <sys/wait.h>
-#include "../../common.h"
-#include "../header/server_util.h"
+#include "common.h"
+#include "server/header/server_util.h"
 
 // 욕설 목록 (내부 전역 변수)
 static const char* bad_words[] = {

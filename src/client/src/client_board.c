@@ -1,8 +1,8 @@
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
-#include "../../common.h"
-#include "../header/client_board.h"
+#include "common.h"
+#include "client/header/client_board.h"
 
 void writePostClient(int sock) {
     char buffer[MAX_BUFFER];

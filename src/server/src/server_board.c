@@ -3,10 +3,10 @@
 #include <string.h>
 #include <unistd.h>
 #include <sys/file.h>
-#include "../../common.h"
-#include "../header/server_board.h"
-#include "../header/server_noti.h" // likePost의 알림, readPost의 댓글 append 위해
-#include "../header/server_util.h"
+#include "common.h"
+#include "server/header/server_noti.h"
+#include "server/header/server_board.h" // likePost의 알림, readPost의 댓글 append 위해
+#include "server/header/server_util.h"
 
 int readPosts(Post posts[]) {
     FILE *fp = fopen(DATA_FILE, "r");

@@ -1,7 +1,7 @@
 #ifndef NOTI_MANAGER_H
 #define NOTI_MANAGER_H
 
-#include "../common.h"
+#include "common.h"
 
 // server_noti_manager.h : 서버 알림 관리 헤더 파일
 
