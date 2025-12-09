@@ -18,11 +18,21 @@ void registerUser(int sock) {
     write(sock, buffer, strlen(buffer));
 
     read(sock, buffer, MAX_BUFFER);
+    if (strncmp(buffer, "ERROR", 5) == 0) {
+        printf("\nX : %s", buffer + 6);
+        return;
+    }
+
     printf("비밀번호를 입력하세요: ");
     getPassword(buffer, 50);
     write(sock, buffer, strlen(buffer));
 
     read(sock, buffer, MAX_BUFFER);
+    if (strncmp(buffer, "ERROR", 5) == 0) {
+        printf("\nX : %s", buffer + 6);
+        return;
+    }
+
     printf("닉네임을 입력하세요: ");
     fgets(buffer, 50, stdin);
     buffer[strcspn(buffer, "\n")] = '\0';
