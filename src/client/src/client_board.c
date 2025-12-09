@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
-#include "../common.h"
+#include "../../common.h"
 #include "../header/client_board.h"
 
 void writePostClient(int sock) {

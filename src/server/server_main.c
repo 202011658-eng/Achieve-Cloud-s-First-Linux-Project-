@@ -11,6 +11,17 @@
 #include "header/server_board.h"
 #include "header/server_noti.h"
 
+int g_server_sock = -1;
+
+void sigint_handler(int sig) {
+    printf("\n[서버] SIGINT 수신, 서버를 종료합니다...\n");
+    if (g_server_sock != -1) {
+        close(g_server_sock);
+        g_server_sock = -1;
+    }
+    exit(0);
+}
+
 void handleClient(int client_sock, char *client_ip) {
     char buffer[MAX_BUFFER];
     char username[50] = "";
@@ -117,13 +128,16 @@ int main(int argc, char *argv[]) {
     if (fp != NULL) {
         fclose(fp);
     }
-    
+
+    signal(SIGINT, sigint_handler);
     signal(SIGCHLD, sigchld_handler);
 
     server_sock = socket(AF_INET, SOCK_STREAM, 0);
     if (server_sock == -1) {
         handleError("socket() error");
     }
+
+    g_server_sock = server_sock;
 
     int option = 1;
     setsockopt(server_sock, SOL_SOCKET, SO_REUSEADDR, &option, sizeof(option));
@@ -171,6 +185,8 @@ int main(int argc, char *argv[]) {
             close(client_sock);
             continue;
         } else if (pid == 0) {
+            signal(SIGINT, SIG_DFL);
+
             close(server_sock);
             handleClient(client_sock, client_ip);
         } else {

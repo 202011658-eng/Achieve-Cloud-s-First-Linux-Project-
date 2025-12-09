@@ -3,7 +3,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <sys/file.h>
-#include "../common.h"
+#include "../../common.h"
 #include "../header/server_noti.h"
 #include "../header/server_board.h" // addComment에서 readPosts 사용 위함
 #include "../header/server_util.h"
