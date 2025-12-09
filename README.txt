@@ -79,6 +79,18 @@ showNotificationsClient() -> 알림 확인
 commentPostClient() -> 댓글 작성
 
 
+==============================25/12/09 수정사항==============================
+sigint_handler -> server_main.c 파일에 추가
+
+시뮬레이션 필요 (중요);
+MakeFile 및 추가 검수 -> 오늘 안에 진행 예정
+
+
+해야할 일 -> 발표 ppt 작성 및 발표 준비;
+
+
+
+
 
 
 
