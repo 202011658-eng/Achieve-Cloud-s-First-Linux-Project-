@@ -32,9 +32,9 @@ void registerUser(int sock) {
     buffer[len] = '\0';
 
     if (strncmp(buffer, "SUCCESS", 7) == 0) {
-        printf("\n✓ %s", buffer + 8);
+        printf("\nO : %s", buffer + 8);
     } else {
-        printf("\n✗ %s", buffer + 6);
+        printf("\nX : %s", buffer + 6);
     }
 }
 
@@ -59,10 +59,10 @@ int loginUser(int sock) {
     buffer[len] = '\0';
 
     if (strncmp(buffer, "SUCCESS", 7) == 0) {
-        printf("\n✓ %s", buffer + 8);
+        printf("\nO : %s", buffer + 8);
         return 1;
     } else {
-        printf("\n✗ %s", buffer + 6);
+        printf("\nX : %s", buffer + 6);
         return 0;
     }
 }
