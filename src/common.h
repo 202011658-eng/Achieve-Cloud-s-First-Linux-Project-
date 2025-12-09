@@ -11,11 +11,11 @@
 #define MAX_BUFFER 4096
 
 // 파일 경로 상수 (서버용)
-#define DATA_FILE "board_data.txt"
-#define USER_FILE "user_data.txt"
-#define COMMENT_FILE "comment_data.txt"
-#define ONLINE_FILE "online_users.txt"
-#define NOTIFICATION_FILE "notification_data.txt"
+#define DATA_FILE "server/data/board_data.txt"
+#define USER_FILE "server/data/user_data.txt"
+#define COMMENT_FILE "server/data/comment_data.txt"
+#define ONLINE_FILE "server/data/online_users.txt"
+#define NOTIFICATION_FILE "server/data/notification_data.txt"
 
 // 제한 상수
 #define MAX_NOTIFICATIONS 3000

@@ -61,7 +61,7 @@ void savePosts(Post posts[], int count) {
 
 void writePost(int client_sock, const char* nickname) {
     Post posts[MAX_POSTS];
-    int count = readPosts(posts);
+    int count = readPosts(posts); // readPost로 지난 게시글 확인
 
     if (count >= MAX_POSTS) {
         write(client_sock, "ERROR|게시글이 꽉 찼습니다.\n",
@@ -70,7 +70,7 @@ void writePost(int client_sock, const char* nickname) {
     }
 
     Post newPost;
-    newPost.id = (count > 0) ? posts[count - 1].id + 1 : 1;
+    newPost.id = (count > 0) ? posts[count - 1].id + 1 : 1; // Post iD 설정
     newPost.views = 0;
     newPost.likes = 0;
 
@@ -88,10 +88,10 @@ void writePost(int client_sock, const char* nickname) {
         return;
     }
 
-    strncpy(newPost.title, buffer, 99);
+    strncpy(newPost.title, buffer, 99); // buffer -> newPost.title로 카피
     newPost.title[99] = '\0';
 
-    strncpy(newPost.author, nickname, 49);
+    strncpy(newPost.author, nickname, 49); // 작성자 닉네임 설정 (buffer -> nickname)
     newPost.author[49] = '\0';
 
     write(client_sock, "CONTENT", 7);
@@ -224,7 +224,7 @@ void deletePost(int client_sock, int post_id, const char* nickname) {
         return;
     }
 
-    for (int i = found; i < count - 1; i++) {
+    for (int i = found; i < count - 1; i++) { // 삭제한 숫자에서 포스트 당겨주기
         posts[i] = posts[i + 1];
     }
 
