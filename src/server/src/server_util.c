@@ -10,7 +10,7 @@
 
 // 욕설 목록 (내부 전역 변수)
 static const char* bad_words[] = {
-    "욕설1", "욕설2", "바보",
+    "욕설1", "욕설2", "바보", "badwordtest123",
     NULL
 };
 

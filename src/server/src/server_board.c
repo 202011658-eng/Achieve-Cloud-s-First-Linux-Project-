@@ -309,10 +309,23 @@ void likePost(int client_sock, int post_id, const char* liker_nickname) {
         return;
     }
 
+    if (strcmp(posts[found].author, liker_nickname) == 0) {
+        write(client_sock,
+              "ERROR|본인의 글은 추천할 수 없습니다.\n",
+              strlen("ERROR|본인의 글은 추천할 수 없습니다.\n"));
+        return;
+    }
+
+    if (posts[found].likes >= MAX_LIKES) {
+        write(client_sock,
+              "ERROR|더 이상 추천할 수 없습니다.\n",
+              strlen("ERROR|더 이상 추천할 수 없습니다.\n"));
+        return;
+    }
+
     posts[found].likes++;
     savePosts(posts, count);
 
-    /* 자기 글을 자기가 추천한 건 알림 안 보냄 */
     if (strcmp(posts[found].author, liker_nickname) != 0) {
         char msg[200];
         snprintf(msg, sizeof(msg),
@@ -402,3 +415,4 @@ void searchPosts(int client_sock, const char* keyword) {
 
     write(client_sock, buffer, offset);
 }
+

@@ -141,7 +141,7 @@ void updatePostClient(int sock) {
     if (strncmp(buffer, "SUCCESS", 7) == 0) {
         printf("\nO : %s", buffer + 8);
     } else {
-        printf("\nX : ", buffer + 6);
+        printf("\nX : %s", buffer + 6);
     }
 }
 
@@ -252,7 +252,7 @@ void commentPostClient(int sock) {
     if (strncmp(buffer, "SUCCESS", 7) == 0) {
         printf("\nO : %s", buffer + 8);
     } else if (strncmp(buffer, "ERROR", 5) == 0) {
-        printf("\nX : ", buffer + 6);
+        printf("\nX : %s", buffer + 6);
     } else {
         printf("\n알 수 없는 서버 응답: %s\n", buffer);
     }

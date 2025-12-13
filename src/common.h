@@ -23,6 +23,7 @@
 #define MAX_USERS 1000
 #define MAX_ONLINE 50
 #define MAX_COMMENTS 2000
+#define MAX_LIKES 100
 
 // 구조체 정의
 typedef struct {

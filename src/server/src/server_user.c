@@ -212,6 +212,7 @@ void registerUser(int client_sock) {
               strlen("ERROR|이미 존재하는 아이디입니다.\n"));
         return;
     }
+    
 
     strncpy(newUser.username, buffer, 49);
     newUser.username[49] = '\0';
@@ -268,6 +269,14 @@ int loginUser(int client_sock, char* username, char* nickname, const char* clien
     buffer[len] = '\0';
     strncpy(input_password, buffer, 49);
     input_password[49] = '\0';
+
+    for (int i = 0; i < online_count; i++) {
+        if (strcmp(online_users[i].username, input_username) == 0) {
+            write(client_sock, "ERROR|이미 로그인된 아이디입니다.\n",
+                  strlen("ERROR|이미 로그인된 아이디입니다.\n"));
+            return 0;
+        }
+    }
 
     if (authenticateUser(input_username, input_password, nickname)) {
         strcpy(username, input_username);
